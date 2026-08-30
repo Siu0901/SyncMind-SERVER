@@ -12,7 +12,7 @@ class OAuthProvider(enum.StrEnum):
 
 
 class OAuthAccount(SQLModel, table=True):
-    __tablename__ = "oauth_accounts"
+    __tablename__ = "oauth_account"
 
     __table_args__ = (
         UniqueConstraint(
@@ -33,7 +33,7 @@ class OAuthAccount(SQLModel, table=True):
     )
 
     user_id: int = Field(
-        foreign_key="users.id",
+        foreign_key="user.id",
         index=True,
     )
 

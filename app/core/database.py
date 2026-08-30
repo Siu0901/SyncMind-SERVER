@@ -46,21 +46,12 @@ async def get_worker_session() -> AsyncIterator[AsyncSession]:
             raise
 
 
-# async def db_ping() -> bool:
-#     try:
-#         async with engine.connect() as conn:
-#             await conn.execute(text("SELECT 1"))
-#         return True
-#     except Exception:
-#         return False
-
 async def db_ping() -> bool:
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         return True
     except Exception as e:
-        print(repr(e))
         return False
 
 
