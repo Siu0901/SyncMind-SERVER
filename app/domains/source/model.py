@@ -26,6 +26,8 @@ class SourceStatus(enum.StrEnum):
 
 
 class Source(SQLModel, table=True):
+    __tablename__ = "source"
+
     id: Optional[int] = Field(
         primary_key=True,
         sa_type=BigInteger,

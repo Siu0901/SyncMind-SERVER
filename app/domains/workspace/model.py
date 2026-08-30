@@ -44,6 +44,8 @@ class WorkSpace(SQLModel, table=True):
 
 
 class WorkSpaceMember(SQLModel, table=True):
+    __tablename__ = "workspace_member"
+
     workspace_id: int = Field(
         foreign_key="workspace.id",
         sa_type=BigInteger,
