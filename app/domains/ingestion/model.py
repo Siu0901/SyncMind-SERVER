@@ -36,7 +36,7 @@ class IngestionJob(SQLModel, table=True):
     )
 
     document_version_id: int = Field(
-        foreign_key="document_versions.id",
+        foreign_key="document_version.id",
         index=True,
     )
 
