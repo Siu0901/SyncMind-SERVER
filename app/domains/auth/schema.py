@@ -1,8 +1,4 @@
-from pydantic import (
-    BaseModel,
-    EmailStr,
-    Field,
-)
+from pydantic import BaseModel, EmailStr, Field
 
 from app.domains.auth.enums import OAuthProvider
 
@@ -26,21 +22,29 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResendEmailRequest(BaseModel):
+    email: EmailStr
+
+
 class AccessTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
 
-class OAuthExchangeRequest(BaseModel):
+class OAuthTicketRequest(BaseModel):
     ticket: str
 
 
 class OAuthUserInfo(BaseModel):
     provider: OAuthProvider
+
     provider_user_id: str
 
     email: EmailStr
-    email_verified: bool
 
     name: str
 
