@@ -27,8 +27,7 @@ class OAuthAccountRepository:
 
     async def create(self, account: OAuthAccount) -> OAuthAccount:
         self.session.add(account)
-
-        await self.session.flush()
         await self.session.refresh(account)
+        await self.session.commit()
 
         return account
