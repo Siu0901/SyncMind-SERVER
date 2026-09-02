@@ -26,3 +26,5 @@ async def get_auth_service(
         users_repo=user_repository,
         oauth_accounts=auth_account_repo,
     )
+
+AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
