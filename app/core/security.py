@@ -10,7 +10,7 @@ import secrets
 import jwt
 from pwdlib import PasswordHash
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 from app.core.config import get_settings
 
@@ -23,11 +23,6 @@ class TokenPayload(BaseModel):
     token_type: str
     jti: str
     exp: int
-
-
-class RefreshTokenResult(BaseModel):
-    token: str
-    jti: str
 
 
 class AuthManager:
@@ -64,7 +59,11 @@ class AuthManager:
         otp = ''.join(secrets.choice(char) for _ in range(6))
         return otp
 
-    def create_access_token(self, user_id: int,) -> str:
+    @staticmethod
+    def normalize_email(email: EmailStr) -> EmailStr:
+        return email.strip().lower()
+
+    def create_access_token(self, user_id: int) -> str:
         now = datetime.now(timezone.utc)
 
         payload = {
@@ -83,7 +82,7 @@ class AuthManager:
             algorithm=self.algorithm,
         )
 
-    def create_refresh_token(self,user_id: int) -> RefreshTokenResult:
+    def create_refresh_token(self,user_id: int) -> tuple[str, str]:
         now = datetime.now(timezone.utc)
 
         jti = str(uuid4())
@@ -104,10 +103,7 @@ class AuthManager:
             algorithm=self.algorithm,
         )
 
-        return RefreshTokenResult(
-            token=token,
-            jti=jti,
-        )
+        return token, jti
 
     def decode(self, token: str) -> Optional[TokenPayload]:
             payload = jwt.decode(

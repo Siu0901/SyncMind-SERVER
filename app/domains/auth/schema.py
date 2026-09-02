@@ -34,8 +34,13 @@ class ResendEmailRequest(BaseModel):
     email: EmailStr
 
 
-class AccessTokenResponse(BaseModel):
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class IssuedTokens(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
 

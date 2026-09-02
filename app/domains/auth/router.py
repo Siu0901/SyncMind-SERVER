@@ -1,9 +1,12 @@
 from fastapi import APIRouter
 
 from app.domains.auth.schema import (
+    LoginRequest,
     RegisterRequest,
     VerifyEmailRequest,
     ResendEmailRequest,
+    IssuedTokens,
+    RefreshTokenRequest,
 )
 from app.domains.auth.dependencies import AuthServiceDep
 
@@ -38,3 +41,28 @@ async def register(
 ):
     await service.register_user(data)
     return {"message": "회원가입이 완료되었습니다."}
+
+
+@auth_router.post("/login")
+async def login(
+    data: LoginRequest,
+    service: AuthServiceDep,
+) -> IssuedTokens:
+    return await service.login_user(data)
+
+
+@auth_router.post("/logout") # 엑세스 토큰 관련해서 봐보자
+async def logout(
+    token: RefreshTokenRequest,
+    service: AuthServiceDep
+):
+    await service.logout(token.refresh_token)
+    return {"message": "로그아웃 성공!"}
+
+
+@auth_router.post("/reissue")
+async def reissue(
+    token: RefreshTokenRequest,
+    service: AuthServiceDep,
+) -> IssuedTokens:
+    return await service.reissue_token(token.refresh_token)

@@ -1,7 +1,11 @@
 import json
 
 import secrets
-from pydantic import BaseModel
+from types import CoroutineType
+
+from typing import Optional, Any
+
+from pydantic import BaseModel, EmailStr
 
 from fastapi import HTTPException
 
@@ -20,18 +24,14 @@ from app.domains.auth.schema import (
     OAuthUserInfo,
     RegisterRequest,
     VerifyEmailRequest,
-    ResendEmailRequest
+    ResendEmailRequest,
+    IssuedTokens
 )
 from app.domains.user.model import User
 from app.domains.user.repository import UserRepository
 
 
 settings = get_settings()
-
-
-class IssuedTokens(BaseModel):
-    access_token: str
-    refresh_token: str
 
 
 class AuthService:
@@ -57,7 +57,8 @@ class AuthService:
 
 
     async def request_register_code(self, data: RegisterRequest):
-        existing_user = await self.users_repo.get_by_email(data.email)
+        email = self.auth_manager.normalize_email(data.email)
+        existing_user = await self.users_repo.get_by_email(email)
 
         if existing_user:
             raise HTTPException(
@@ -74,19 +75,20 @@ class AuthService:
             "name": data.name.strip(),
         }
 
-        key = f"{self.REGISTER_PREFIX}:{data.email}"
+        key = f"{self.REGISTER_PREFIX}:{email}"
 
         await self.redis.setex(key, 300, json.dumps(payload))
 
         await self.redis.enqueue_job(
             "send_verification_email",
-            data.email,
+            email,
             code,
         )
 
 
     async def resend_register_code(self, data: ResendEmailRequest):
-        key = f"{self.REGISTER_PREFIX}:{data.email}"
+        email = self.auth_manager.normalize_email(data.email)
+        key = f"{self.REGISTER_PREFIX}:{email}"
 
         raw = await self.redis.get(key)
 
@@ -109,13 +111,14 @@ class AuthService:
 
         await self.redis.enqueue_job(
             "send_verification_email",
-            data.email,
+            email,
             code,
         )
 
 
     async def register_user(self, data: VerifyEmailRequest):
-        key = f"{self.REGISTER_PREFIX}:{data.email}"
+        email = self.auth_manager.normalize_email(data.email)
+        key = f"{self.REGISTER_PREFIX}:{email}"
         payload = await self._check_otp_code(key)
 
         if payload["code"] != data.code:
@@ -124,7 +127,7 @@ class AuthService:
                 detail="인증 코드가 올바르지 않습니다."
             )
 
-        existing_user = await self.users_repo.get_by_email(data.email)
+        existing_user = await self.users_repo.get_by_email(email)
 
         if existing_user:
             await self.redis.delete(key)
@@ -135,7 +138,7 @@ class AuthService:
             )
 
         user = User(
-            email=data.email,
+            email=email,
             password_hash=(
                 payload["password_hash"]
             ),
@@ -149,6 +152,114 @@ class AuthService:
         await self.session.commit()
 
         await self.redis.delete(key)
+
+
+    async def login_user(self, data: LoginRequest) -> IssuedTokens:
+        email = self.auth_manager.normalize_email(data.email)
+
+        user = await self._check_user(email, data.password)
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="이메일 또는 비밀번호가 올바르지 않습니다."
+            )
+
+        if not user.is_active:
+            raise HTTPException(
+                status_code=403,
+                detail="비활성화된 계정입니다."
+            )
+
+        return await self._issue_tokens(user.id)
+
+
+    async def logout(self, refresh_token: str):
+        payload = self.auth_manager.decode(refresh_token)
+
+        if payload.token_type != "refresh":
+            return
+
+        key = (
+            f"auth:refresh:"
+            f"{payload.user_id}:"
+            f"{payload.jti}"
+        )
+        # access 블랙리스트 해야되는거 아닌가
+        await self.redis.delete(key)
+
+
+    async def withdraw(self, user: User):
+        user.is_active = False
+
+        self.session.add(user)
+
+        await self.session.commit()
+
+
+    async def reissue_token(self, refresh_token: str) -> IssuedTokens:
+        payload = self.auth_manager.decode(refresh_token)
+
+        if payload.token_type != "refresh":
+            raise HTTPException(
+                status_code=401,
+                detail="유효하지 않은 토큰입니다.",
+            )
+
+        key = (
+            f"auth:refresh:"
+            f"{payload.user_id}:"
+            f"{payload.jti}"
+        )
+
+        exists = await self.redis.exists(key)
+
+        if not exists:
+            raise HTTPException(
+                status_code=401,
+                detail="만료되었거나 폐기된 토큰입니다.",
+            )
+
+        user = await self.users_repo.get_by_id(payload.user_id)
+
+        if user is None or not user.is_active:
+            raise HTTPException(
+                status_code=401,
+                detail="유효하지 않은 사용자입니다.",
+            )
+
+        await self.redis.delete(key)
+
+        return await self._issue_tokens(payload.user_id)
+
+
+    async def _issue_tokens(self, user_id: int) -> IssuedTokens:
+        access_token = self.auth_manager.create_access_token(user_id)
+        refresh_token, jti = self.auth_manager.create_refresh_token(user_id)
+
+        key = f"auth:refresh:{user_id}:{jti}"
+
+        await self.redis.setex(
+            key,
+            settings.REFRESH_TOKEN_EXPIRE_DAY * 86400,
+            "1",
+        )
+
+        return IssuedTokens(
+            access_token=access_token,
+            refresh_token=refresh_token,
+        )
+
+
+    async def _check_user(self, email: EmailStr, password: str) -> User | False:
+        user = await self.users_repo.get_by_email(email)
+        if not user:
+            return False
+        if not self.auth_manager.verify_password(
+                password,
+                user.password_hash
+        ):
+            return False
+        return user
 
 
     async def _check_otp_code(self, key: str):

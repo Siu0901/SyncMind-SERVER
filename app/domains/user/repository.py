@@ -12,7 +12,11 @@ class UserRepository:
         self.session = session
 
     async def get_by_id(self, user_id: int) -> Optional[User]:
-        return await self.session.get(User, user_id)
+        statement = select(User).where(User.id == user_id)
+
+        result = await self.session.exec(statement)
+
+        return result.first()
 
     async def get_by_email(self, email: str) -> Optional[User]:
         statement = select(User).where(User.email == email)
