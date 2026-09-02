@@ -1,7 +1,11 @@
+import string
+
 from typing import Optional
 
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
+
+import secrets
 
 import jwt
 from pwdlib import PasswordHash
@@ -53,6 +57,12 @@ class AuthManager:
             password,
             password_hash,
         )
+
+    @staticmethod
+    def create_otp_code() -> str:
+        char = string.ascii_letters + string.digits
+        otp = ''.join(secrets.choice(char) for _ in range(6))
+        return otp
 
     def create_access_token(self, user_id: int,) -> str:
         now = datetime.now(timezone.utc)

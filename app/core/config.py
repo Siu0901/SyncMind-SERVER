@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from pydantic import SecretStr, EmailStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -32,6 +33,8 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAY: int
 
     #oauth
+    #---------
+    #google
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
@@ -39,6 +42,7 @@ class Settings(BaseSettings):
     GOOGLE_TOKEN_URL: str
     GOOGLE_USERINFO_URL: str
 
+    #github
     GITHUB_CLIENT_ID: str
     GITHUB_CLIENT_SECRET: str
     GITHUB_REDIRECT_URI: str
@@ -48,6 +52,14 @@ class Settings(BaseSettings):
     GITHUB_EMAILS_URL: str
 
     FRONTEND_OAUTH_CALLBACK_URL: str
+    #---------
+
+    #email
+    SMTP_PASSWORD: SecretStr
+    SMTP_FROM_EMAIL: EmailStr
+    SMTP_USERNAME: str
+    SMTP_PORT: int
+    SMTP_HOST: str
 
 
 @lru_cache
