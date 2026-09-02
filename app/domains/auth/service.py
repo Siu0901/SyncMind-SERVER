@@ -5,7 +5,6 @@ from pydantic import EmailStr
 from pydantic import BaseModel
 
 from arq.connections import ArqRedis
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import get_settings
 from app.core.security import AuthManager
@@ -36,14 +35,11 @@ class AuthService:
 
     def __init__(
         self,
-        session: AsyncSession,
         redis: ArqRedis,
         auth_manager: AuthManager,
         users_repo: UserRepository,
         oauth_accounts: OAuthAccountRepository,
-        oauth_factory: OAuthClientFactory,
     ):
-        self.session = session
         self.redis = redis
 
         self.auth_manager = auth_manager
@@ -51,8 +47,6 @@ class AuthService:
         self.users_repo = users_repo
 
         self.oauth_accounts = oauth_accounts
-
-        self.oauth_factory = oauth_factory
 
 
     async def request_register_code(self, data: RegisterRequest):

@@ -1,10 +1,10 @@
 from typing import Optional
 
-from httpx._transports import asgi
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.user.model import User
+
 
 class UserRepository:
 
