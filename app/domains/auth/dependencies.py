@@ -15,12 +15,14 @@ AuthAccountRepoDep = Annotated[OAuthAccountRepository, Depends(get_oauth_account
 
 
 async def get_auth_service(
+    session: SessionDep,
     auth_manager: AuthManagerDep,
     user_repository: UserRepositoryDep,
     auth_account_repo: AuthAccountRepoDep,
     redis: RedisDep,
 ) -> AuthService:
     return AuthService(
+        session=session,
         redis=redis,
         auth_manager=auth_manager,
         users_repo=user_repository,

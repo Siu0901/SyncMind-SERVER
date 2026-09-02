@@ -1,10 +1,13 @@
 import json
 
 import secrets
-from pydantic import EmailStr
 from pydantic import BaseModel
 
+from fastapi import HTTPException
+
 from arq.connections import ArqRedis
+
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import get_settings
 from app.core.security import AuthManager
@@ -17,6 +20,7 @@ from app.domains.auth.schema import (
     OAuthUserInfo,
     RegisterRequest,
     VerifyEmailRequest,
+    ResendEmailRequest
 )
 from app.domains.user.model import User
 from app.domains.user.repository import UserRepository
@@ -35,11 +39,14 @@ class AuthService:
 
     def __init__(
         self,
+        session: AsyncSession,
         redis: ArqRedis,
         auth_manager: AuthManager,
         users_repo: UserRepository,
         oauth_accounts: OAuthAccountRepository,
     ):
+        self.session = session
+
         self.redis = redis
 
         self.auth_manager = auth_manager
@@ -53,7 +60,10 @@ class AuthService:
         existing_user = await self.users_repo.get_by_email(data.email)
 
         if existing_user:
-            raise ValueError("이미 사용 중인 이메일입니다.")
+            raise HTTPException(
+                status_code=409,
+                detail="이미 사용 중인 이메일입니다."
+            )
 
         code = self.auth_manager.create_otp_code()
 
@@ -75,13 +85,16 @@ class AuthService:
         )
 
 
-    async def resend_register_code(self, email: EmailStr):
-        key = f"{self.REGISTER_PREFIX}:{email}"
+    async def resend_register_code(self, data: ResendEmailRequest):
+        key = f"{self.REGISTER_PREFIX}:{data.email}"
 
         raw = await self.redis.get(key)
 
         if raw is None:
-            raise ValueError("진행 중인 회원가입 요청이 없습니다.")
+            raise HTTPException(
+                status_code=404,
+                detail="진행 중인 회원가입 요청이 없습니다."
+            )
 
         if isinstance(raw, bytes):
             raw = raw.decode()
@@ -96,7 +109,7 @@ class AuthService:
 
         await self.redis.enqueue_job(
             "send_verification_email",
-            email,
+            data.email,
             code,
         )
 
@@ -106,23 +119,20 @@ class AuthService:
         payload = await self._check_otp_code(key)
 
         if payload["code"] != data.code:
-            ttl = await self.redis.ttl(key)
-
-            if ttl > 0:
-                await self.redis.setex(
-                    key,
-                    ttl,
-                    json.dumps(payload),
-                )
-
-            raise ValueError("인증 코드가 올바르지 않습니다.")
+            raise HTTPException(
+                status_code=400,
+                detail="인증 코드가 올바르지 않습니다."
+            )
 
         existing_user = await self.users_repo.get_by_email(data.email)
 
         if existing_user:
             await self.redis.delete(key)
 
-            raise ValueError("이미 사용 중인 이메일입니다.")
+            raise HTTPException(
+                status_code=409,
+                detail="이미 사용 중인 이메일 입니다."
+            )
 
         user = User(
             email=data.email,
@@ -145,9 +155,12 @@ class AuthService:
         data = await self.redis.get(key)
 
         if data is None:
-            raise ValueError(
-                "인증 코드가 만료되었거나 "
-                "회원가입 요청이 존재하지 않습니다."
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "인증 코드가 만료되었거나 "
+                    "회원가입 요청이 존재하지 않습니다."
+                )
             )
 
         if isinstance(data, bytes):
