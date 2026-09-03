@@ -1,6 +1,7 @@
 import json
 
 import secrets
+from uuid import uuid4
 
 from typing import Optional, Any
 
@@ -25,6 +26,7 @@ from app.domains.auth.exceptions import (
     InactiveUserError,
     TokenInvalidError,
     TokenExpiredError,
+    SessionExpiredError,
     ExpiredCodeOrRequestNotFoundError,
 )
 from app.domains.auth.schema import (
@@ -154,7 +156,7 @@ class AuthService:
         email = self.auth_manager.normalize_email(data.email)
 
         user = await self._check_user(email, data.password)
-        if not user:
+        if user is None:
             raise InvalidCredentialsError()
 
         if not user.is_active:
@@ -164,17 +166,36 @@ class AuthService:
 
 
     async def logout(self, refresh_token: str):
-        payload = self.auth_manager.decode(refresh_token)
+        payload = self.auth_manager.decode(
+            refresh_token
+        )
 
         if payload.token_type != "refresh":
+            raise TokenInvalidError()
+
+        key = f"auth:session:{payload.session_id}"
+
+        session = await self.redis.hgetall(key)
+
+        if not session:
             return
 
-        key = (
-            f"auth:refresh:"
-            f"{payload.user_id}:"
-            f"{payload.jti}"
-        )
-        # access 블랙리스트 해야되는거 아닌가
+        def read(name: str) -> str | None:
+            value = session.get(name)
+
+            if value is None:
+                value = session.get(name.encode())
+
+            if isinstance(value, bytes):
+                return value.decode()
+
+            return value
+
+        current_refresh_jti = read("refresh_jti")
+
+        if current_refresh_jti != payload.jti:
+            raise SessionExpiredError()
+
         await self.redis.delete(key)
 
 
@@ -185,6 +206,24 @@ class AuthService:
 
         await self.session.commit()
 
+        await self.revoke_all_sessions(user.id)
+
+
+    async def revoke_all_sessions(self, user_id: int):
+        index_key = f"auth:user:sessions:{user_id}"
+
+        session_ids = await self.redis.smembers(index_key)
+
+        for session_id in session_ids:
+            if isinstance(session_id, bytes):
+                session_id = session_id.decode()
+
+            await self.redis.delete(
+                f"auth:session:{session_id}"
+            )
+
+        await self.redis.delete(index_key)
+
 
     async def reissue_token(self, refresh_token: str) -> IssuedTokens:
         payload = self.auth_manager.decode(refresh_token)
@@ -192,37 +231,86 @@ class AuthService:
         if payload.token_type != "refresh":
             raise TokenInvalidError()
 
-        key = (
-            f"auth:refresh:"
-            f"{payload.user_id}:"
-            f"{payload.jti}"
-        )
+        key = f"auth:session:{payload.session_id}"
 
-        exists = await self.redis.exists(key)
+        session = await self.redis.hgetall(key)
 
-        if not exists:
-            raise TokenExpiredError()
+        if not session:
+            raise SessionExpiredError()
+
+        def read(name: str):
+            value = session.get(name)
+
+            if value is None:
+                value = session.get(
+                    name.encode()
+                )
+
+            if isinstance(value, bytes):
+                return value.decode()
+
+            return value
+
+        session_user_id = read("user_id")
+        current_refresh_jti = read("refresh_jti")
+
+        if (
+            session_user_id is None
+            or int(session_user_id)
+            != payload.user_id
+        ):
+            raise TokenInvalidError()
+
+        if current_refresh_jti != payload.jti:
+            raise SessionExpiredError()
 
         user = await self.users_repo.get_by_id(payload.user_id)
 
-        if user is None or not user.is_active:
-            raise InactiveUserError(message="유효하지 않는 사용자 입니다.")
+        if user is None:
+            raise TokenInvalidError()
 
-        await self.redis.delete(key)
+        if not user.is_active:
+            raise InactiveUserError()
 
-        return await self._issue_tokens(payload.user_id)
+        return await self._issue_tokens(
+            user.id,
+            payload.session_id,
+        )
 
 
-    async def _issue_tokens(self, user_id: int) -> IssuedTokens:
-        access_token = self.auth_manager.create_access_token(user_id)
-        refresh_token, jti = self.auth_manager.create_refresh_token(user_id)
+    async def _issue_tokens(
+        self,
+        user_id: int,
+        session_id: str | None = None,
+    ) -> IssuedTokens:
+        if session_id is None:
+            session_id = str(uuid4())
 
-        key = f"auth:refresh:{user_id}:{jti}"
+        access_token, access_jti = self.auth_manager.create_access_token(
+            user_id, session_id
+        )
+        refresh_token, refresh_jti = self.auth_manager.create_refresh_token(
+            user_id, session_id
+        )
 
-        await self.redis.setex(
+        key = f"auth:session:{session_id}"
+
+        await self.redis.hset(
             key,
-            settings.REFRESH_TOKEN_EXPIRE_DAY * 86400,
-            "1",
+            mapping={
+                "user_id": str(user_id),
+                "access_jti": access_jti,
+                "refresh_jti": refresh_jti,
+            },
+        )
+        await self.redis.expire(
+            key,
+            settings.REFRESH_TOKEN_EXPIRE_DAY
+            * 86400,
+        )
+        await self.redis.sadd(
+            f"auth:user:sessions:{user_id}",
+            session_id,
         )
 
         return IssuedTokens(
@@ -231,15 +319,19 @@ class AuthService:
         )
 
 
-    async def _check_user(self, email: EmailStr, password: str) -> User | False:
+    async def _check_user(self, email: EmailStr, password: str) -> Optional[User]:
         user = await self.users_repo.get_by_email(email)
         if not user:
-            return False
+            return None
+
+        if user.password_hash is None:
+            return None
+
         if not self.auth_manager.verify_password(
-                password,
-                user.password_hash
+            password,
+            user.password_hash
         ):
-            return False
+            return None
         return user
 
 

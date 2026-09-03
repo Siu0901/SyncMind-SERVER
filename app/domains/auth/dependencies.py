@@ -1,3 +1,5 @@
+import jwt
+
 from typing import Annotated, Optional
 
 from fastapi import Depends
@@ -12,6 +14,7 @@ from app.domains.auth.service import AuthService
 from app.domains.auth.exceptions import (
     InactiveUserError,
     TokenInvalidError,
+    SessionExpiredError,
 )
 from app.domains.user.dependencies import UserRepositoryDep
 from app.domains.user.model import User
@@ -27,19 +30,49 @@ async def get_current_user(
     ],
     auth_manager: AuthManagerDep,
     user_repository: UserRepositoryDep,
+    redis: RedisDep,
 ) -> User:
     if credentials is None:
         raise TokenInvalidError()
 
-    token = credentials.credentials
-
-    try:
-        payload = auth_manager.decode(token)
-    except Exception as exc:
-        raise TokenInvalidError() from exc
+    payload = auth_manager.decode(
+        credentials.credentials,
+    )
 
     if payload.token_type != "access":
         raise TokenInvalidError()
+
+    key = f"auth:session:{payload.session_id}"
+
+    session = await redis.hgetall(key)
+
+    if not session:
+        raise SessionExpiredError()
+
+    def read(name: str):
+        value = session.get(name)
+
+        if value is None:
+            value = session.get(
+                name.encode()
+            )
+
+        if isinstance(value, bytes):
+            return value.decode()
+
+        return value
+
+    session_user_id = read("user_id")
+    current_access_jti = read("access_jti")
+
+    if session_user_id is None:
+        raise SessionExpiredError()
+
+    if int(session_user_id) != payload.user_id:
+        raise TokenInvalidError()
+
+    if current_access_jti != payload.jti:
+        raise SessionExpiredError()
 
     user = await user_repository.get_by_id(payload.user_id)
 

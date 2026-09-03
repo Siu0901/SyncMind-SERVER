@@ -14,6 +14,11 @@ from pydantic import BaseModel, EmailStr
 
 from app.core.config import get_settings
 
+from app.domains.auth.exceptions import (
+    TokenExpiredError,
+    TokenInvalidError,
+)
+
 
 settings = get_settings()
 
@@ -23,6 +28,7 @@ class TokenPayload(BaseModel):
     token_type: str
     jti: str
     exp: int
+    session_id: str
 
 
 class AuthManager:
@@ -63,26 +69,39 @@ class AuthManager:
     def normalize_email(email: EmailStr) -> EmailStr:
         return email.strip().lower()
 
-    def create_access_token(self, user_id: int) -> str:
+    def create_access_token(
+        self,
+        user_id: int,
+        session_id: str,
+    ) -> tuple[str, str]:
         now = datetime.now(timezone.utc)
+
+        jti = str(uuid4())
 
         payload = {
             "sub": str(user_id),
             "type": "access",
-            "jti": str(uuid4()),
+            "sid": session_id,
+            "jti": jti,
             "iat": now,
             "exp": now + timedelta(
                 minutes=self.access_minutes
             ),
         }
 
-        return jwt.encode(
+        token = jwt.encode(
             payload,
             self.secret,
             algorithm=self.algorithm,
         )
 
-    def create_refresh_token(self,user_id: int) -> tuple[str, str]:
+        return token, jti
+
+    def create_refresh_token(
+        self,
+        user_id: int,
+        session_id: str,
+    ) -> tuple[str, str]:
         now = datetime.now(timezone.utc)
 
         jti = str(uuid4())
@@ -90,6 +109,7 @@ class AuthManager:
         payload = {
             "sub": str(user_id),
             "type": "refresh",
+            "sid": session_id,
             "jti": jti,
             "iat": now,
             "exp": now + timedelta(
@@ -105,16 +125,28 @@ class AuthManager:
 
         return token, jti
 
-    def decode(self, token: str) -> Optional[TokenPayload]:
+    def decode(self, token: str) -> TokenPayload:
+        try:
             payload = jwt.decode(
                 token,
                 self.secret,
-                algorithms=[self.algorithm],
+                algorithms=self.algorithm,
             )
 
+        except jwt.ExpiredSignatureError:
+            raise TokenExpiredError()
+
+        except jwt.InvalidTokenError:
+            raise TokenInvalidError()
+
+        try:
             return TokenPayload(
                 user_id=int(payload["sub"]),
                 token_type=payload["type"],
+                session_id=payload["sid"],
                 jti=payload["jti"],
-                exp=int(payload["exp"]),
+                exp=payload["exp"],
             )
+
+        except (KeyError, TypeError, ValueError):
+            raise TokenInvalidError()
