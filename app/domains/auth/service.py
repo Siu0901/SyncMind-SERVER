@@ -1,13 +1,10 @@
 import json
 
 import secrets
-from types import CoroutineType
 
 from typing import Optional, Any
 
-from pydantic import BaseModel, EmailStr
-
-from fastapi import HTTPException
+from pydantic import EmailStr
 
 from arq.connections import ArqRedis
 
@@ -19,6 +16,17 @@ from app.domains.auth.enums import OAuthProvider
 from app.domains.auth.model import OAuthAccount
 
 from app.domains.auth.repository import OAuthAccountRepository
+from app.domains.auth.exceptions import (
+    UserNotFoundError,
+    EmailAlreadyExistsError,
+    RegisterRequestNotFoundError,
+    InvalidVerificationCodeError,
+    InvalidCredentialsError,
+    InactiveUserError,
+    TokenInvalidError,
+    TokenExpiredError,
+    ExpiredCodeOrRequestNotFoundError,
+)
 from app.domains.auth.schema import (
     LoginRequest,
     OAuthUserInfo,
@@ -61,10 +69,7 @@ class AuthService:
         existing_user = await self.users_repo.get_by_email(email)
 
         if existing_user:
-            raise HTTPException(
-                status_code=409,
-                detail="이미 사용 중인 이메일입니다."
-            )
+            raise EmailAlreadyExistsError()
 
         code = self.auth_manager.create_otp_code()
 
@@ -93,10 +98,7 @@ class AuthService:
         raw = await self.redis.get(key)
 
         if raw is None:
-            raise HTTPException(
-                status_code=404,
-                detail="진행 중인 회원가입 요청이 없습니다."
-            )
+            raise RegisterRequestNotFoundError()
 
         if isinstance(raw, bytes):
             raw = raw.decode()
@@ -122,20 +124,14 @@ class AuthService:
         payload = await self._check_otp_code(key)
 
         if payload["code"] != data.code:
-            raise HTTPException(
-                status_code=400,
-                detail="인증 코드가 올바르지 않습니다."
-            )
+            raise InvalidVerificationCodeError()
 
         existing_user = await self.users_repo.get_by_email(email)
 
         if existing_user:
             await self.redis.delete(key)
 
-            raise HTTPException(
-                status_code=409,
-                detail="이미 사용 중인 이메일 입니다."
-            )
+            raise EmailAlreadyExistsError()
 
         user = User(
             email=email,
@@ -159,16 +155,10 @@ class AuthService:
 
         user = await self._check_user(email, data.password)
         if not user:
-            raise HTTPException(
-                status_code=401,
-                detail="이메일 또는 비밀번호가 올바르지 않습니다."
-            )
+            raise InvalidCredentialsError()
 
         if not user.is_active:
-            raise HTTPException(
-                status_code=403,
-                detail="비활성화된 계정입니다."
-            )
+            raise InactiveUserError()
 
         return await self._issue_tokens(user.id)
 
@@ -200,10 +190,7 @@ class AuthService:
         payload = self.auth_manager.decode(refresh_token)
 
         if payload.token_type != "refresh":
-            raise HTTPException(
-                status_code=401,
-                detail="유효하지 않은 토큰입니다.",
-            )
+            raise TokenInvalidError()
 
         key = (
             f"auth:refresh:"
@@ -214,18 +201,12 @@ class AuthService:
         exists = await self.redis.exists(key)
 
         if not exists:
-            raise HTTPException(
-                status_code=401,
-                detail="만료되었거나 폐기된 토큰입니다.",
-            )
+            raise TokenExpiredError()
 
         user = await self.users_repo.get_by_id(payload.user_id)
 
         if user is None or not user.is_active:
-            raise HTTPException(
-                status_code=401,
-                detail="유효하지 않은 사용자입니다.",
-            )
+            raise InactiveUserError(message="유효하지 않는 사용자 입니다.")
 
         await self.redis.delete(key)
 
@@ -266,13 +247,7 @@ class AuthService:
         data = await self.redis.get(key)
 
         if data is None:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "인증 코드가 만료되었거나 "
-                    "회원가입 요청이 존재하지 않습니다."
-                )
-            )
+            raise ExpiredCodeOrRequestNotFoundError()
 
         if isinstance(data, bytes):
             data = data.decode()
