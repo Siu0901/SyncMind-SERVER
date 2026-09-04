@@ -1,14 +1,10 @@
-import enum
 from typing import Optional
 from datetime import datetime
 
 from sqlalchemy import Column, DateTime, UniqueConstraint, func
 from sqlmodel import Field, SQLModel
 
-
-class OAuthProvider(enum.StrEnum):
-    GOOGLE = "google"
-    GITHUB = "github"
+from app.domains.auth.enums import OAuthProvider
 
 
 class OAuthAccount(SQLModel, table=True):

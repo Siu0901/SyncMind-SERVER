@@ -19,6 +19,8 @@ from app.core.qdrant import (
     qdrant_ping,
 )
 from app.core.log import setup_logging
+from app.core.exception.handlers import register_exception_handlers
+from app.api import router
 
 
 setup_logging()
@@ -47,6 +49,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="SyncMind", lifespan=lifespan)
+
+app.include_router(router)
+
+register_exception_handlers(app)
 
 
 @app.get("/health")
