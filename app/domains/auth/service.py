@@ -144,6 +144,11 @@ class AuthService:
 
         await self.redis.delete(key)
 
+        logger.info(
+            "Registration completed | user_id=%s",
+            user.id,
+        )
+
 
     async def login_user(self, data: LoginRequest) -> IssuedTokens:
         email = self.auth_manager.normalize_email(data.email)
@@ -154,6 +159,11 @@ class AuthService:
 
         if not user.is_active:
             raise InactiveUserError()
+
+        logger.info(
+            "Login succeeded | user_id=%s",
+            user.id,
+        )
 
         return await self._issue_tokens(user.id)
 
@@ -188,6 +198,11 @@ class AuthService:
 
         if current_refresh_jti != payload.jti:
             raise SessionExpiredError()
+
+        logger.info(
+            "Logout succeeded | user_id=%s",
+            payload.user_id,
+        )
 
         await self.redis.delete(key)
 
@@ -264,6 +279,11 @@ class AuthService:
 
         if not user.is_active:
             raise InactiveUserError()
+
+        logger.info(
+            "Token reissued | user_id=%s",
+            user.id,
+        )
 
         return await self._issue_tokens(
             user.id,
