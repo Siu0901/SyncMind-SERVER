@@ -1,5 +1,3 @@
-import jwt
-
 from typing import Annotated, Optional
 
 from fastapi import Depends
@@ -16,6 +14,10 @@ from app.domains.auth.exceptions import (
     TokenInvalidError,
     SessionExpiredError,
 )
+from app.domains.auth.oauth.factory import OAuthClientFactory
+from app.domains.auth.oauth.github import GitHubOAuthClient
+from app.domains.auth.oauth.google import GoogleOAuthClient
+from app.domains.auth.oauth.service import OAuthService
 from app.domains.user.dependencies import UserRepositoryDep
 from app.domains.user.model import User
 
@@ -23,6 +25,7 @@ from app.domains.user.model import User
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+# ========= auth =========
 async def get_current_user(
     credentials: Annotated[
         Optional[HTTPAuthorizationCredentials],
@@ -88,17 +91,10 @@ async def get_current_user(
 CurrentUserDep = Annotated[User,Depends(get_current_user)]
 
 
-def get_oauth_account_repo(session: SessionDep) -> OAuthAccountRepository:
-    return OAuthAccountRepository(session)
-
-AuthAccountRepoDep = Annotated[OAuthAccountRepository, Depends(get_oauth_account_repo)]
-
-
 async def get_auth_service(
     session: SessionDep,
     auth_manager: AuthManagerDep,
     user_repository: UserRepositoryDep,
-    auth_account_repo: AuthAccountRepoDep,
     redis: RedisDep,
 ) -> AuthService:
     return AuthService(
@@ -106,7 +102,77 @@ async def get_auth_service(
         redis=redis,
         auth_manager=auth_manager,
         users_repo=user_repository,
-        oauth_accounts=auth_account_repo,
     )
 
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
+
+
+# ========= oauth =========
+def get_oauth_account_repo(session: SessionDep) -> OAuthAccountRepository:
+    return OAuthAccountRepository(session)
+
+AuthAccountRepoDep = Annotated[OAuthAccountRepository, Depends(get_oauth_account_repo)]
+
+
+def get_google_oauth_client(
+) -> GoogleOAuthClient:
+    return GoogleOAuthClient()
+
+
+GoogleOAuthClientDep = Annotated[
+    GoogleOAuthClient,
+    Depends(get_google_oauth_client),
+]
+
+
+def get_github_oauth_client(
+) -> GitHubOAuthClient:
+    return GitHubOAuthClient()
+
+
+GitHubOAuthClientDep = Annotated[
+    GitHubOAuthClient,
+    Depends(get_github_oauth_client),
+]
+
+
+def get_oauth_factory(
+    google: GoogleOAuthClientDep,
+    github: GitHubOAuthClientDep,
+) -> OAuthClientFactory:
+
+    return OAuthClientFactory(
+        google=google,
+        github=github,
+    )
+
+
+OAuthFactoryDep = Annotated[
+    OAuthClientFactory,
+    Depends(get_oauth_factory),
+]
+
+
+async def get_oauth_service(
+    session: SessionDep,
+    redis: RedisDep,
+    auth_manager: AuthManagerDep,
+    user_repository: UserRepositoryDep,
+    auth_account_repo: AuthAccountRepoDep,
+    oauth_factory: OAuthFactoryDep,
+) -> OAuthService:
+
+    return OAuthService(
+        session=session,
+        redis=redis,
+        auth_manager=auth_manager,
+        users_repo=user_repository,
+        oauth_accounts=auth_account_repo,
+        oauth_factory=oauth_factory,
+    )
+
+
+OAuthServiceDep = Annotated[
+    OAuthService,
+    Depends(get_oauth_service),
+]
