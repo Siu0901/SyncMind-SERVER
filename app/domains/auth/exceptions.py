@@ -120,3 +120,30 @@ class OAuthEmailConflictError(AppException):
             "이미 다른 로그인 방식으로 가입된 이메일입니다.",
             409,
         )
+
+
+class OAuthProviderError(AppException):
+    def __init__(
+        self,
+        provider: str,
+    ):
+        super().__init__(
+            f"{provider} OAuth 처리 중 오류가 발생했습니다.",
+            502,
+        )
+
+
+class OAuthEmailNotFoundError(AppException):
+    def __init__(self):
+        super().__init__(
+            "OAuth 계정에서 이메일을 가져올 수 없습니다.",
+            400,
+        )
+
+
+class OAuthTicketInvalidError(AppException):
+    def __init__(self):
+        super().__init__(
+            "OAuth login ticket이 만료되었거나 유효하지 않습니다.",
+            401,
+        )
