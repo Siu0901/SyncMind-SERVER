@@ -89,9 +89,9 @@ async def oauth_login(
 @auth_router.get("/oauth/{provider}/callback")
 async def oauth_callback(
     provider: OAuthProvider,
+    service: OAuthServiceDep,
     code: str,
     state: str,
-    service: OAuthServiceDep,
 ):
     redirect_url = (
         await service.handle_callback(
@@ -109,5 +109,5 @@ async def oauth_callback(
 async def oauth_exchange(
     data: OAuthTicketRequest,
     service: AuthServiceDep,
-):
+) -> IssuedTokens:
     return await service.exchange_oauth_ticket(data.ticket)
