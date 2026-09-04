@@ -1,9 +1,10 @@
 import json
 
-import secrets
+import logging
+
 from uuid import uuid4
 
-from typing import Optional, Any
+from typing import Optional
 
 from pydantic import EmailStr
 
@@ -13,25 +14,20 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import get_settings
 from app.core.security import AuthManager
-from app.domains.auth.enums import OAuthProvider
-from app.domains.auth.model import OAuthAccount
 
-from app.domains.auth.repository import OAuthAccountRepository
 from app.domains.auth.exceptions import (
-    UserNotFoundError,
     EmailAlreadyExistsError,
     RegisterRequestNotFoundError,
     InvalidVerificationCodeError,
     InvalidCredentialsError,
     InactiveUserError,
     TokenInvalidError,
-    TokenExpiredError,
     SessionExpiredError,
+    OAuthTicketInvalidError,
     ExpiredCodeOrRequestNotFoundError,
 )
 from app.domains.auth.schema import (
     LoginRequest,
-    OAuthUserInfo,
     RegisterRequest,
     VerifyEmailRequest,
     ResendEmailRequest,
@@ -43,9 +39,12 @@ from app.domains.user.repository import UserRepository
 
 settings = get_settings()
 
+logger = logging.getLogger(__name__)
+
 
 class AuthService:
     REGISTER_PREFIX = "auth:register"
+    OAUTH_TICKET_PREFIX = "auth:oauth:ticket"
 
     def __init__(
         self,
@@ -53,17 +52,11 @@ class AuthService:
         redis: ArqRedis,
         auth_manager: AuthManager,
         users_repo: UserRepository,
-        oauth_accounts: OAuthAccountRepository,
     ):
         self.session = session
-
         self.redis = redis
-
         self.auth_manager = auth_manager
-
         self.users_repo = users_repo
-
-        self.oauth_accounts = oauth_accounts
 
 
     async def request_register_code(self, data: RegisterRequest):
@@ -276,6 +269,36 @@ class AuthService:
             user.id,
             payload.session_id,
         )
+
+
+    async def exchange_oauth_ticket(self, ticket: str) -> IssuedTokens:
+
+        key = f"{self.OAUTH_TICKET_PREFIX}:{ticket}"
+
+        user_id = await self.redis.get(key)
+
+        if user_id is None:
+            raise OAuthTicketInvalidError()
+
+        await self.redis.delete(key)
+
+        if isinstance(user_id, bytes):
+            user_id = user_id.decode()
+
+        user = await self.users_repo.get_by_id(int(user_id))
+
+        if user is None:
+            raise TokenInvalidError()
+
+        if not user.is_active:
+            raise InactiveUserError()
+
+        logger.info(
+            "OAuth ticket exchanged | user_id=%s",
+            user.id,
+        )
+
+        return await self._issue_tokens(user.id)
 
 
     async def _issue_tokens(
