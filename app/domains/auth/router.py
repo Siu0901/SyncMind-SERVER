@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from fastapi.responses import RedirectResponse
 
 from app.domains.auth.schema import (
     LoginRequest,
@@ -8,7 +9,12 @@ from app.domains.auth.schema import (
     IssuedTokens,
     RefreshTokenRequest,
 )
-from app.domains.auth.dependencies import AuthServiceDep
+from app.domains.auth.enums import OAuthProvider
+from app.domains.auth.schema import OAuthTicketRequest
+from app.domains.auth.dependencies import (
+    AuthServiceDep,
+    OAuthServiceDep,
+)
 
 auth_router = APIRouter(
     prefix="/auth",
@@ -16,6 +22,7 @@ auth_router = APIRouter(
 )
 
 
+# ======= auth =======
 @auth_router.post("/email/send")
 async def send_email(
     data: RegisterRequest,
@@ -66,3 +73,41 @@ async def reissue(
     service: AuthServiceDep,
 ) -> IssuedTokens:
     return await service.reissue_token(token.refresh_token)
+
+
+# ======= oauth =======
+@auth_router.get("/oauth/{provider}/login")
+async def oauth_login(
+    provider: OAuthProvider,
+    service: OAuthServiceDep,
+):
+    url = await service.create_login_url(provider)
+
+    return RedirectResponse(url=url)
+
+
+@auth_router.get("/oauth/{provider}/callback")
+async def oauth_callback(
+    provider: OAuthProvider,
+    code: str,
+    state: str,
+    service: OAuthServiceDep,
+):
+    redirect_url = (
+        await service.handle_callback(
+            provider=provider,
+            code=code,
+            state=state,
+        )
+    )
+
+    #return RedirectResponse(url=redirect_url)
+    return {"wow": redirect_url}
+
+
+@auth_router.post("/oauth/exchange")
+async def oauth_exchange(
+    data: OAuthTicketRequest,
+    service: AuthServiceDep,
+):
+    return await service.exchange_oauth_ticket(data.ticket)
