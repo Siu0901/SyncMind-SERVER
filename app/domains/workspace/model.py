@@ -1,4 +1,3 @@
-import enum
 from datetime import datetime
 from sqlmodel import (
     SQLModel,
@@ -10,11 +9,7 @@ from sqlmodel import (
     String
 )
 
-
-class WorkspaceRole(enum.StrEnum):
-    OWNER = "owner"
-    ADMIN = "admin"
-    MEMBER = "member"
+from app.domains.workspace.enums import WorkspaceRole
 
 
 class WorkSpace(SQLModel, table=True):
