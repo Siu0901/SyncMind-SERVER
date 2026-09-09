@@ -44,12 +44,14 @@ class WorkSpaceMember(SQLModel, table=True):
     workspace_id: int = Field(
         foreign_key="workspace.id",
         sa_type=BigInteger,
-        primary_key=True
+        primary_key=True,
+        ondelete="CASCADE"
     )
     user_id: int = Field(
         foreign_key="user.id",
         sa_type=BigInteger,
-        primary_key=True
+        primary_key=True,
+        ondelete="CASCADE"
     )
 
     role: WorkspaceRole = Field(
