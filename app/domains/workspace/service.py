@@ -138,6 +138,9 @@ class WorkspaceService:
         if existing_member:
             raise WorkspaceMemberAlreadyExistsError()
 
+        if data.role == WorkspaceRole.OWNER:
+            raise WorkspacePermissionDeniedError()
+
         workspace_member = WorkSpaceMember(
             workspace_id=workspace_id,
             user_id=data.user_id,
@@ -185,6 +188,7 @@ class WorkspaceService:
 
         return member
 
+
     async def remove_member(
         self,
         requester: WorkSpaceMember,
@@ -208,6 +212,23 @@ class WorkspaceService:
 
         logger.info(
             "Workspace member removed | workspace_id=%s user_id=%s",
+            workspace_id,
+            user_id,
+        )
+
+
+    async def leave_workspace(self, member: WorkSpaceMember):
+        if member.role == WorkspaceRole.OWNER:
+            raise CannotRemoveWorkspaceOwnerError()
+
+        workspace_id = member.workspace_id
+        user_id = member.user_id
+
+        await self.members_repo.delete(member)
+        await self.session.commit()
+
+        logger.info(
+            "Workspace member left | workspace_id=%s user_id=%s",
             workspace_id,
             user_id,
         )

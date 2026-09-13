@@ -7,6 +7,7 @@ from app.domains.workspace.exceptions import (
     WorkspaceMemberNotFoundError,
     WorkspaceNotFoundError,
     WorkspacePermissionDeniedError,
+    WorkspaceOwnerRequiredError
 )
 from app.domains.auth.dependencies import (
     CurrentUserDep,
@@ -135,7 +136,7 @@ async def require_workspace_owner(
     member: CurrentWorkspaceMemberDep,
 ) -> WorkSpaceMember:
     if member.role != WorkspaceRole.OWNER:
-        raise WorkspacePermissionDeniedError()
+        raise WorkspaceOwnerRequiredError()
 
     return member
 
@@ -147,12 +148,12 @@ WorkspaceOwnerDep = Annotated[
 
 async def get_target_workspace_member(
     workspace_id: int,
-    user_id: int,
+    member_id: int,
     member_repository: WorkSpaceMemberRepositoryDep,
 ) -> WorkSpaceMember:
     member = await member_repository.get_member(
         workspace_id,
-        user_id,
+        member_id,
     )
 
     if member is None:

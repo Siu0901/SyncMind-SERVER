@@ -5,6 +5,7 @@ from app.domains.auth.dependencies import (
 )
 from app.domains.workspace.dependencies import (
     CurrentWorkSpaceDep,
+    CurrentWorkspaceMemberDep,
     TargetWorkspaceMemberDep,
     WorkspaceAdminDep,
     WorkspaceOwnerDep,
@@ -105,6 +106,15 @@ async def add_workspace_member(
     service: WorkspaceServiceDep,
 ):
     return await service.add_member(workspace.id, data)
+
+
+@workspace_router.delete("/{workspace_id}/members/me")
+async def leave_workspace(
+    member: CurrentWorkspaceMemberDep,
+    service: WorkspaceServiceDep,
+):
+    await service.leave_workspace(member)
+    return {"message": "Successfully left workspace"}
 
 
 @workspace_router.patch(
