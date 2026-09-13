@@ -31,7 +31,12 @@ import app.models  # noqa: F401
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
 # 테스트에서 실제로 건드리는 테이블. 매 테스트 후 비운다.
-_TABLES_TO_CLEAN = ('"oauth_account"', '"user"')
+_TABLES_TO_CLEAN = (
+    '"oauth_account"',
+    '"workspace_member"',
+    '"workspace"',
+    '"user"',
+)
 
 
 @pytest.fixture(scope="session")
