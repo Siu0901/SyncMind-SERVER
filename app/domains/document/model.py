@@ -39,14 +39,16 @@ class Document(SQLModel, table=True):
     workspace_id: int = Field(
         foreign_key="workspace.id",
         index=True,
+        ondelete="CASCADE",
     )
     source_id: Optional[int] = Field(
         default=None,
         foreign_key="source.id",
         index=True,
+        ondelete="CASCADE",
     )
 
-    external_id: Optional[int] = Field(
+    external_id: Optional[str] = Field(
         default=None,
         max_length=1024,
     )
@@ -95,6 +97,7 @@ class DocumentVersion(SQLModel, table=True):
     document_id: int = Field(
         foreign_key="document.id",
         index=True,
+        ondelete="CASCADE",
     )
 
     version: int
@@ -105,12 +108,12 @@ class DocumentVersion(SQLModel, table=True):
     )
 
     # 직접 업로드 파일이나 원본 snapshot
-    s3_key: Optional[int] = Field(
+    s3_key: Optional[str] = Field(
         default=None,
         max_length=1024,
     )
 
-    mime_type: Optional[int] = Field(
+    mime_type: Optional[str] = Field(
         default=None,
         max_length=255,
     )
@@ -153,6 +156,7 @@ class DocumentChunk(SQLModel, table=True):
     document_version_id: int = Field(
         foreign_key="document_version.id",
         index=True,
+        ondelete="CASCADE",
     )
 
     chunk_index: int
