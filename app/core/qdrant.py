@@ -32,14 +32,34 @@ async def ensure_collection() -> None:
         collection_name=settings.QDRANT_COLLECTION,
     )
 
-    if exists:
-        return
+    if not exists:
+        await client.create_collection(
+            collection_name=settings.QDRANT_COLLECTION,
+            vectors_config={
+                "dense": models.VectorParams(
+                    size=settings.EMBEDDING_DIMENSION,
+                    distance=models.Distance.COSINE,
+                ),
+            },
+            sparse_vectors_config={
+                "bm25": models.SparseVectorParams(
+                    modifier=models.Modifier.IDF,
+                ),
+            },
+        )
 
-    await client.create_collection(
+    await ensure_payload_indexes()
+
+
+async def ensure_payload_indexes() -> None:
+    client = get_qdrant()
+
+    await client.create_payload_index(
         collection_name=settings.QDRANT_COLLECTION,
-        vectors_config=models.VectorParams(
-            size=settings.EMBEDDING_DIMENSION,
-            distance=models.Distance.COSINE,
+        field_name="workspace_id",
+        field_schema=models.KeywordIndexParams(
+            type=models.KeywordIndexType.KEYWORD,
+            is_tenant=True,
         ),
     )
 
