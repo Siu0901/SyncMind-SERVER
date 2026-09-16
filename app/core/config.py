@@ -67,6 +67,18 @@ class Settings(BaseSettings):
     AWS_REGION: str
     AWS_S3_BUCKET: str
 
+    # 업로드 문서 관련 데이터들
+    #---------------------
+    # 업로드 가능한 문서
+    ALLOWED_CONTENT_TYPES: set = {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain",
+        "text/markdown",
+    }
+    # 그 파일 최대 크기
+    MAX_FILE_SIZE: int = 20 * 1024 * 1024
+    #----------------------
 
 @lru_cache
 def get_settings() -> Settings:
