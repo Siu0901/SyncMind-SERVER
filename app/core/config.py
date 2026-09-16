@@ -1,7 +1,7 @@
-import os
 from functools import lru_cache
 from pydantic import SecretStr, EmailStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str
     SMTP_PORT: int
     SMTP_HOST: str
+
+    #aws
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: SecretStr
+    AWS_REGION: str
+    AWS_S3_BUCKET: str
 
 
 @lru_cache
