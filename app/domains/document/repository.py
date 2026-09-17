@@ -28,6 +28,16 @@ class DocumentRepository:
 
         return result.first()
 
+
+    async def get_raw_by_id(
+        self,
+        document_id: int,
+    ) -> Optional[Document]:
+        statement = select(Document).where(Document.id == document_id)
+        return (await self.session.exec(statement)).first()
+
+
+
     async def get_all(self, workspace_id: int) -> list[Document]:
         statement = (select(Document)
             .where(
