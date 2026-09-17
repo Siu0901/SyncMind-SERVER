@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile, status
 
 from app.domains.document.dependencies import (
     CurrentDocumentDep,
     DocumentServiceDep,
+    DocumentUploadServiceDep,
 )
 from app.domains.document.schema import (
     DocumentChunkResponse,
@@ -53,7 +54,7 @@ async def update_document(
 ):
     return await service.update_document(document, data)
 
-
+# 이거 나중에 qdrant 짤때 되면 거기 데이터도 삭제되게 해야됨
 @document_router.delete("/delete/{document_id}")
 async def delete_document(
     document: CurrentDocumentDep,
@@ -83,3 +84,19 @@ async def get_document_chunks(
     service: DocumentServiceDep,
 ):
     return await service.get_chunks(document)
+
+
+@document_router.post(
+    "/upload",
+    response_model=DocumentResponse,
+)
+async def upload_document(
+    workspace: CurrentWorkSpaceDep,
+    _: WorkspaceAdminDep,
+    file: UploadFile,
+    service: DocumentUploadServiceDep,
+):
+    return await service.upload(
+        workspace_id=workspace.id,
+        file=file,
+    )
