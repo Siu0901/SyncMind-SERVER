@@ -2,7 +2,7 @@ import logging
 import sys
 
 
-def setup_logging() -> None:
+def setup_logging():
     logging.basicConfig(
         level=logging.INFO,
         format=(
@@ -12,6 +12,7 @@ def setup_logging() -> None:
             "%(message)s"
         ),
         stream=sys.stdout,
+        force=True,
     )
 
     logging.getLogger("sqlalchemy.engine").setLevel(
