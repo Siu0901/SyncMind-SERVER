@@ -56,3 +56,17 @@ class S3Client:
                 Bucket=self.bucket,
                 Key=key,
             )
+
+
+    async def delete_files(self, keys: list[str]):
+        async with self.session.client("s3") as s3_client:
+            await s3_client.delete_objects(
+                Bucket=self.bucket,
+                Delete={
+                    "Objects": [
+                        {"Key": key}
+                        for key in keys
+                    ],
+                },
+                Quiet=True,
+            )
