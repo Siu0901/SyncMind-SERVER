@@ -67,6 +67,6 @@ class S3Client:
                         {"Key": key}
                         for key in keys
                     ],
+                    "Quiet": True,
                 },
-                Quiet=True,
             )

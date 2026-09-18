@@ -62,6 +62,7 @@ async def delete_document(
     service: DocumentServiceDep,
 ):
     await service.delete_document(document)
+    return {"message": "Document deleted"}
 
 
 @document_router.get(

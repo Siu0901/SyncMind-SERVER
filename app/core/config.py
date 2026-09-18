@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     }
     # 그 파일 최대 크기
     MAX_FILE_SIZE: int = 20 * 1024 * 1024
+
+    MAX_PAGES: int = 500
+    GRAPHICS_LIMIT: int = 5000
+    HANGUL_START: int = 0xAC00
+    HANGUL_END: int = 0xD7A3
     #----------------------
 
 @lru_cache
