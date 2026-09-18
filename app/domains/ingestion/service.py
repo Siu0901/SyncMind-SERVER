@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -16,6 +17,10 @@ from app.domains.ingestion.enums import (
     IngestionStage,
     IngestionJobStatus,
 )
+from app.domains.ingestion.schema import (
+    ParsedDocument,
+)
+from app.domains.ingestion.parsers.factory import DocumentParser
 from app.domains.ingestion.model import IngestionJob
 from app.domains.ingestion.repository import IngestionJobRepository
 from app.core.s3 import S3Client
@@ -29,12 +34,14 @@ class IngestionService:
         self,
         session: AsyncSession,
         s3: S3Client,
+        parser: DocumentParser,
         jobs_repo: IngestionJobRepository,
         documents_repo: DocumentRepository,
         versions_repo: DocumentVersionRepository,
     ):
         self.session = session
         self.s3 = s3
+        self.parser = parser
         self.jobs_repo = jobs_repo
         self.documents_repo = documents_repo
         self.versions_repo = versions_repo
@@ -71,12 +78,24 @@ class IngestionService:
 
             file_bytes = await self._download(job, version)
 
+            parsed_document = await self._parse(
+                job,
+                version,
+                file_bytes,
+            )
+
+            logger.info(
+                "Document parsed "
+                "| job_id=%s sections=%s chars=%s",
+                job.id,
+                len(parsed_document.sections),
+                sum(
+                    len(section.text)
+                    for section in parsed_document.sections
+                ),
+            )
+            print(parsed_document)
             # 이거 다음 단계에서 구현할 것들임
-            #
-            # parsed = await self._parse(
-            #     version,
-            #     file_bytes,
-            # )
             #
             # chunks = await self._chunk(
             #     parsed
@@ -103,6 +122,29 @@ class IngestionService:
             await self._fail_job(job, document, exc)
 
             raise
+
+
+    async def _parse(
+        self,
+        job: IngestionJob,
+        version: DocumentVersion,
+        file_bytes: bytes,
+    ) -> ParsedDocument:
+        job.stage = IngestionStage.PARSING
+
+        self.session.add(job)
+        await self.session.commit()
+
+        parsed = await asyncio.to_thread(
+            self.parser.parse,
+            version.mime_type,
+            file_bytes
+        )
+
+        if not parsed.sections:
+            raise RuntimeError("No text extracted from document")
+
+        return parsed
 
 
     async def _start_job(

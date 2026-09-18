@@ -11,7 +11,7 @@ from app.domains.ingestion.repository import (
 from app.domains.ingestion.service import (
     IngestionService,
 )
-from app.core.s3 import S3Client
+from app.domains.ingestion.parsers.factory import DocumentParser
 
 
 logger = logging.getLogger(__name__)
@@ -25,6 +25,7 @@ async def process_document(
         service = IngestionService(
             session=session,
             s3=ctx["s3"],
+            parser=DocumentParser(),
             jobs_repo=IngestionJobRepository(session),
             documents_repo=DocumentRepository(session),
             versions_repo=DocumentVersionRepository(session),
