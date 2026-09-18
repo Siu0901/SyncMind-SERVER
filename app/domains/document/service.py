@@ -26,6 +26,12 @@ from app.domains.document.schema import (
     DocumentUpdateRequest,
     DocumentVersionCreateData,
 )
+from app.domains.document.exceptions import (
+    DocumentNotFoundError,
+    DocumentNotReadyError,
+    DocumentVersionNotFoundError,
+    DuplicateDocumentError,
+)
 from app.domains.ingestion.repository import IngestionJobRepository
 from app.domains.ingestion.model import IngestionJob
 from app.domains.ingestion.enums import IngestionJobStatus
@@ -209,7 +215,11 @@ class DocumentService:
 
 
     async def get_versions(self, document: Document) -> list[DocumentVersion]:
-        return await self.versions_repo.get_all(document.id)
+        result =  await self.versions_repo.get_all(document.id)
+        if result is None:
+            raise DocumentVersionNotFoundError()
+
+        return result
 
 
     async def get_chunks(self, document: Document) -> list[DocumentChunk]:
@@ -297,6 +307,13 @@ class DocumentUploadService:
         file: UploadFile,
     ) -> Document:
         file_size, content_hash = await self._prepare_file(file)
+
+        exist = await self.versions_repo.exists_by_content_hash(
+            content_hash, workspace_id
+        )
+
+        if exist:
+            raise DuplicateDocumentError()
 
         filename = Path(file.filename).name
 

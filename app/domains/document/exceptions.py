@@ -23,3 +23,11 @@ class DocumentNotReadyError(AppException):
             "Document is not ready",
             409,
         )
+
+
+class DuplicateDocumentError(AppException):
+    def __init__(self):
+        super().__init__(
+            message="이미 동일한 문서가 존재합니다.",
+            status_code=409,
+        )

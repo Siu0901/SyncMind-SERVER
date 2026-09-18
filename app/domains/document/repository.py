@@ -126,6 +126,22 @@ class DocumentVersionRepository:
 
         return result.first()
 
+    async def exists_by_content_hash(
+            self,
+            content_hash: str,
+            workspace_id: int,
+    ) -> bool:
+        statement = (select(DocumentVersion.id)
+            .join(Document, DocumentVersion.id == Document.id)
+            .where(
+            Document.workspace_id == workspace_id,
+                    DocumentVersion.content_hash == content_hash
+            )
+            .limit(1)
+        )
+        result = await self.session.exec(statement)
+        return result.first() is not None
+
     async def create(self, version: DocumentVersion) -> DocumentVersion:
         self.session.add(version)
 

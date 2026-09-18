@@ -94,7 +94,6 @@ class IngestionService:
                     for section in parsed_document.sections
                 ),
             )
-            print(parsed_document)
             # 이거 다음 단계에서 구현할 것들임
             #
             # chunks = await self._chunk(
