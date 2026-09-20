@@ -15,3 +15,16 @@ class ParsedSection:
 @dataclass
 class ParsedDocument:
     sections: list[ParsedSection]
+
+
+@dataclass
+class ChunkData:
+    content: str
+    token_count: int
+
+    page_number: Optional[int] = None
+    section: Optional[str] = None
+
+    metadata: dict[str, Any] = field(
+        default_factory=dict
+    )

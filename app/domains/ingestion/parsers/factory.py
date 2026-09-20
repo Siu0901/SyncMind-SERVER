@@ -14,15 +14,15 @@ class DocumentParser:
     ) -> ParsedDocument:
         # 일단은 pdf 하고 마크다운, text 파일만 하자
         if mime_type == "application/pdf":
-            return pdf.PDFParser().parse(data)
+            return pdf.pdf_parse(data)
 
         if mime_type == "text/plain":
-            return text.TextParser().parse(data)
+            return text.text_parse(data)
 
         if mime_type in {
             "text/markdown",
             "text/x-markdown",
         }:
-            return markdown.MarkdownParser().parse(data)
+            return markdown.markdown_parse(data)
 
         raise ValueError(f"Unsupported mime type: {mime_type}")

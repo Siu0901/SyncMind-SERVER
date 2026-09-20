@@ -83,7 +83,7 @@ class IngestionService:
                 version,
                 file_bytes,
             )
-
+            print("wow ",parsed_document) # 디버깅
             logger.info(
                 "Document parsed "
                 "| job_id=%s sections=%s chars=%s",

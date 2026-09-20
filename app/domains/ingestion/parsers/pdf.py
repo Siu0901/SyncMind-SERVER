@@ -47,68 +47,66 @@ def _section_of(chunk: dict) -> Optional[str]:
     return " > ".join(item[1] for item in items) if items else None
 
 
-class PDFParser:
-    @staticmethod
-    def parse(data: bytes) -> ParsedDocument:
+def pdf_parse(data: bytes) -> ParsedDocument:
+    try:
+        document = pymupdf.open(stream=data, filetype="pdf")
+    except Exception as exc:
+        raise CorruptedPdfError() from exc
+
+    try:
+        if document.needs_pass:
+            raise EncryptedPdfError()
+
+        page_count = document.page_count
+
+        if page_count == 0:
+            raise EmptyPdfError()
+
+        if page_count > settings.MAX_PAGES:
+            raise PdfTooLargeError(page_count, settings.MAX_PAGES)
+
         try:
-            document = pymupdf.open(stream=data, filetype="pdf")
+            chunks = pymupdf4llm.to_markdown(
+                document,
+                page_chunks=True,
+                ocr_language="kor+eng",
+                ocr_dpi=300,
+                graphics_limit=settings.GRAPHICS_LIMIT,
+                ignore_graphics=True,
+                image_size_limit=0.05,
+                show_progress=False,
+            )
         except Exception as exc:
-            raise CorruptedPdfError() from exc
+            raise PdfParseError(type(exc).__name__) from exc
 
-        try:
-            if document.needs_pass:
-                raise EncryptedPdfError()
+        sections: list[ParsedSection] = []
+        skipped = 0
 
-            page_count = document.page_count
+        for index, chunk in enumerate(chunks, start=1):
+            text = chunk["text"].strip()
 
-            if page_count == 0:
-                raise EmptyPdfError()
+            if not text or _is_garbled(text):
+                skipped += 1
+                continue
 
-            if page_count > settings.MAX_PAGES:
-                raise PdfTooLargeError(page_count, settings.MAX_PAGES)
-
-            try:
-                chunks = pymupdf4llm.to_markdown(
-                    document,
-                    page_chunks=True,
-                    ocr_language="kor+eng",
-                    ocr_dpi=300,
-                    graphics_limit=settings.GRAPHICS_LIMIT,
-                    ignore_graphics=True,
-                    image_size_limit=0.05,
-                    show_progress=False,
+            sections.append(
+                ParsedSection(
+                    text=text,
+                    page_number=chunk["metadata"].get("page", index),
+                    section=_section_of(chunk),
                 )
-            except Exception as exc:
-                raise PdfParseError(type(exc).__name__) from exc
+            )
+        print("check", sections) # 디버깅
+        if not sections:
+            raise NoTextLayerError(page_count=page_count, skipped_pages=skipped)
 
-            sections: list[ParsedSection] = []
-            skipped = 0
+        if skipped:
+            logger.warning(
+                "PDF partially skipped | pages=%s parsed=%s skipped=%s",
+                page_count, len(sections), skipped,
+            )
 
-            for index, chunk in enumerate(chunks, start=1):
-                text = chunk["text"].strip()
+        return ParsedDocument(sections=sections)
 
-                if not text or _is_garbled(text):
-                    skipped += 1
-                    continue
-
-                sections.append(
-                    ParsedSection(
-                        text=text,
-                        page_number=chunk["metadata"].get("page", index),
-                        section=_section_of(chunk),
-                    )
-                )
-
-            if not sections:
-                raise NoTextLayerError(page_count=page_count, skipped_pages=skipped)
-
-            if skipped:
-                logger.warning(
-                    "PDF partially skipped | pages=%s parsed=%s skipped=%s",
-                    page_count, len(sections), skipped,
-                )
-
-            return ParsedDocument(sections=sections)
-
-        finally:
-            document.close()
+    finally:
+        document.close()

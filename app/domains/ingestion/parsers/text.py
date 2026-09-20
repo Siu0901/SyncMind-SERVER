@@ -4,11 +4,9 @@ from app.domains.ingestion.schema import (
 )
 
 
-class TextParser:
-    @staticmethod
-    def parse(data: bytes) -> ParsedDocument:
-        text = data.decode("utf-8").strip()
+def text_parse(data: bytes) -> ParsedDocument:
+    text = data.decode("utf-8").strip()
 
-        return ParsedDocument(
-            sections=[ParsedSection(text=text)]
-        )
+    return ParsedDocument(
+        sections=[ParsedSection(text=text)]
+    )
