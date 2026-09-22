@@ -94,30 +94,11 @@ class Settings(BaseSettings):
     #----------------------
 
     # 청킹
-    MAX_TOKENS: int = 512  # 일단 가장 보편적인걸로 설정함
-    MIN_TOKENS: int = 64
-    OVERLAP_RATIO: float = 0.12 # 오버랩 10~15%가 좋다해서 적절하게 12% 정도로 함
-    OVERLAP: int = 60
-    MAX_PROTECTED_TOKENS: int = 2048
     ENCODING_NAME: str
-
-    TOKENS_PER_CHAR_KO: float = 1.0
-    TOKENS_PER_CHAR_EN: float = 0.4
-
-    SEPARATORS: list[tuple[str, str]] = [
-        ("\n## ", "next"),
-        ("\n### ", "next"),
-        ("\n#### ", "next"),
-        ("\n\n", "prev"),
-        ("\n", "prev"),
-        ("다. ", "prev"),
-        ("요. ", "prev"),
-        ("까? ", "prev"),
-        ("니다. ", "prev"),
-        (". ", "prev"),
-        (" ", "prev"),
-        ("", "prev"),
-    ]
+    MAX_TOKENS: int = 768 # 512가 기본인데 한국어는 영어보다 토큰 딸려서 768 정도로 높여야 될듯.
+    MIN_TOKENS: int = 96
+    OVERLAP_RATIO: float = 0.12 # 오버랩 10~15%가 좋다해서 적절하게 12% 정도로 함
+    MAX_PROTECTED_TOKENS: int = 2048
 
 
 @lru_cache
