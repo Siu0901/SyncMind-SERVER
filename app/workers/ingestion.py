@@ -3,6 +3,7 @@ import logging
 from app.core.database import get_worker_session
 from app.domains.document.repository import (
     DocumentRepository,
+    DocumentChunkRepository,
     DocumentVersionRepository,
 )
 from app.domains.ingestion.repository import (
@@ -12,6 +13,7 @@ from app.domains.ingestion.service import (
     IngestionService,
 )
 from app.domains.ingestion.parsers.factory import DocumentParser
+from app.domains.ingestion.chunker.document_chunker import DocumentChunker
 
 
 logger = logging.getLogger(__name__)
@@ -25,9 +27,11 @@ async def process_document(
         service = IngestionService(
             session=session,
             s3=ctx["s3"],
+            chunker=DocumentChunker(),
             parser=DocumentParser(),
             jobs_repo=IngestionJobRepository(session),
             documents_repo=DocumentRepository(session),
+            chunks_repo=DocumentChunkRepository(session),
             versions_repo=DocumentVersionRepository(session),
         )
 

@@ -8,10 +8,16 @@ from app.domains.document.model import (
     Document,
     DocumentStatus,
     DocumentVersion,
+    DocumentChunk,
 )
 from app.domains.document.repository import (
     DocumentRepository,
+    DocumentChunkRepository,
     DocumentVersionRepository,
+)
+from app.domains.document.exceptions import (
+    DocumentNotFoundError,
+    DocumentVersionNotFoundError,
 )
 from app.domains.ingestion.enums import (
     IngestionStage,
@@ -20,7 +26,14 @@ from app.domains.ingestion.enums import (
 from app.domains.ingestion.schema import (
     ParsedDocument,
 )
+from app.domains.ingestion.exceptions import (
+    NoChunksError,
+    NoTextExtractedError,
+    NoS3KeyVersionsError,
+    IngestionJobNotFoundError,
+)
 from app.domains.ingestion.parsers.factory import DocumentParser
+from app.domains.ingestion.chunker.document_chunker import DocumentChunker
 from app.domains.ingestion.model import IngestionJob
 from app.domains.ingestion.repository import IngestionJobRepository
 from app.core.s3 import S3Client
@@ -35,15 +48,19 @@ class IngestionService:
         session: AsyncSession,
         s3: S3Client,
         parser: DocumentParser,
+        chunker: DocumentChunker,
         jobs_repo: IngestionJobRepository,
         documents_repo: DocumentRepository,
+        chunks_repo: DocumentChunkRepository,
         versions_repo: DocumentVersionRepository,
     ):
         self.session = session
         self.s3 = s3
         self.parser = parser
+        self.chunker = chunker
         self.jobs_repo = jobs_repo
         self.documents_repo = documents_repo
+        self.chunks_repo = chunks_repo
         self.versions_repo = versions_repo
 
 
@@ -51,27 +68,21 @@ class IngestionService:
         job = await self.jobs_repo.get_by_id(job_id)
 
         if job is None:
-            raise RuntimeError(f"IngestionJob not found: {job_id}")
+            raise IngestionJobNotFoundError(job_id)
 
         version = await self.versions_repo.get_by_id(
             job.document_version_id
         )
 
         if version is None:
-            raise RuntimeError(
-                "DocumentVersion not found "
-                f"| version_id={job.document_version_id}"
-            )
+            raise DocumentVersionNotFoundError()
 
         document = await self.documents_repo.get_raw_by_id(
             version.document_id
         )
 
         if document is None:
-            raise RuntimeError(
-                "Document not found "
-                f"| document_id={version.document_id}"
-            )
+            raise DocumentNotFoundError()
 
         try:
             await self._start_job(job, document)
@@ -83,7 +94,7 @@ class IngestionService:
                 version,
                 file_bytes,
             )
-            print("wow ",parsed_document) # 디버깅
+
             logger.info(
                 "Document parsed "
                 "| job_id=%s sections=%s chars=%s",
@@ -94,11 +105,14 @@ class IngestionService:
                     for section in parsed_document.sections
                 ),
             )
+
+            chunks = await self._chunk(
+                job,
+                version,
+                parsed_document,
+            )
+            self._print_chunks(chunks) # 디버깅
             # 이거 다음 단계에서 구현할 것들임
-            #
-            # chunks = await self._chunk(
-            #     parsed
-            # )
             #
             # vectors = await self._embed(
             #     chunks
@@ -141,9 +155,91 @@ class IngestionService:
         )
 
         if not parsed.sections:
-            raise RuntimeError("No text extracted from document")
+            raise NoTextExtractedError()
 
         return parsed
+
+
+    async def _chunk(
+        self,
+        job: IngestionJob,
+        version: DocumentVersion,
+        parsed_document: ParsedDocument,
+    ) -> list[DocumentChunk]:
+        self.session.add(job)
+        await self.session.commit()
+
+        chunk_data_list = self.chunker.chunk(parsed_document)
+
+        if not chunk_data_list:
+            raise NoChunksError()
+
+        chunks = [
+            DocumentChunk(
+                document_version_id=version.id,
+                chunk_index=index,
+                content=data.content,
+                token_count=data.token_count,
+                page_number=data.page_number,
+                section=data.section,
+                chunk_metadata=data.metadata,
+            )
+            for index, data in enumerate(chunk_data_list)
+        ]
+
+        await self.chunks_repo.create_many(chunks)
+
+        await self.session.commit()
+
+        logger.info(
+            "Document chunked "
+            "| job_id=%s version_id=%s chunks=%s",
+            job.id,
+            version.id,
+            len(chunks),
+        )
+
+        return chunks
+
+    # 디버깅용
+    @staticmethod
+    def _print_chunks(chunks: list, preview: int | None = None, min_tokens: int | None = None) -> None:
+        if not chunks:
+            print("청크 없음")
+            return
+
+        counts = [chunk.token_count for chunk in chunks]
+
+        print("=" * 80)
+        print(
+            f"총 {len(chunks)}개 | 토큰 평균 {sum(counts) / len(counts):.0f}"
+            f" / 최소 {min(counts)} / 최대 {max(counts)}"
+        )
+        if min_tokens is not None:
+            short = sum(count < min_tokens for count in counts)
+            print(f"{min_tokens}토큰 미만: {short}개")
+        print("=" * 80)
+
+        for chunk in chunks:
+            page = chunk.page_number if chunk.page_number is not None else "-"
+
+            header = f"[#{chunk.chunk_index}] p.{page} | {chunk.token_count} tokens"
+            if chunk.section:
+                header += f" | {chunk.section}"
+            if min_tokens is not None and chunk.token_count < min_tokens:
+                header += "짧음"
+
+            print(header)
+            print("-" * 80)
+
+            content = chunk.content
+            if preview is not None and len(content) > preview:
+                content = content[:preview] + " …"
+
+            for line in content.splitlines():
+                print(f"  {line}")
+
+            print()
 
 
     async def _start_job(
@@ -175,10 +271,7 @@ class IngestionService:
         version: DocumentVersion,
     ) -> bytes:
         if version.s3_key is None:
-            raise RuntimeError(
-                "S3 key is missing "
-                f"| version_id={version.id}"
-            )
+            raise NoS3KeyVersionsError(version.id)
 
         job.stage = IngestionStage.DOWNLOADING
 
