@@ -54,3 +54,36 @@ class PdfParseError(AppException):
             message,
             422,
         )
+
+
+class IngestionJobNotFoundError(AppException):
+    def __init__(self, job_id: int):
+        super().__init__(
+            "IngestionJob not found",
+            404,
+        )
+
+
+class NoChunksError(AppException):
+    def __init__(self):
+        super().__init__(
+            "No chunks found in PDF",
+            422
+        )
+
+
+class NoTextExtractedError(AppException):
+    def __init__(self):
+        super().__init__(
+            "No text extracted from document",
+            400
+        )
+
+
+class NoS3KeyVersionsError(AppException):
+    def __init__(self, version_id: int):
+        super().__init__(
+            "S3 key is missing "
+            f"| version_id={version_id}",
+            404
+        )

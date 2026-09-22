@@ -96,7 +96,7 @@ def pdf_parse(data: bytes) -> ParsedDocument:
                     section=_section_of(chunk),
                 )
             )
-        print("check", sections) # 디버깅
+
         if not sections:
             raise NoTextLayerError(page_count=page_count, skipped_pages=skipped)
 
