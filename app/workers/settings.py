@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.core.s3 import S3Client
 from app.workers.email import send_verification_email
 from app.workers.ingestion import process_document
+from app.domains.ingestion.embedding.factory import create_embedding
 
 
 settings = get_settings()
@@ -20,7 +21,9 @@ settings = get_settings()
 
 async def startup(ctx):
     setup_logging()
+
     ctx["s3"] = S3Client()
+    ctx["embedding"] = create_embedding()
 
     await init_qdrant()
 

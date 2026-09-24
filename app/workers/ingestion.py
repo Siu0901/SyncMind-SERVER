@@ -1,6 +1,7 @@
 import logging
 
 from app.core.database import get_worker_session
+from app.core.qdrant import get_qdrant
 from app.domains.document.repository import (
     DocumentRepository,
     DocumentChunkRepository,
@@ -26,8 +27,10 @@ async def process_document(
     async with get_worker_session() as session:
         service = IngestionService(
             session=session,
+            qdrant=get_qdrant(),
             s3=ctx["s3"],
             chunker=DocumentChunker(),
+            embedding=ctx["embedding"],
             parser=DocumentParser(),
             jobs_repo=IngestionJobRepository(session),
             documents_repo=DocumentRepository(session),
