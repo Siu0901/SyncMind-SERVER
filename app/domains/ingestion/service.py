@@ -2,6 +2,10 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
+from app.core.config import get_settings
+
+from qdrant_client import models
+from qdrant_client import AsyncQdrantClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.document.model import (
@@ -34,6 +38,7 @@ from app.domains.ingestion.exceptions import (
 )
 from app.domains.ingestion.parsers.factory import DocumentParser
 from app.domains.ingestion.chunker.document_chunker import DocumentChunker
+from app.domains.ingestion.embedding.port import EmbeddingPort
 from app.domains.ingestion.model import IngestionJob
 from app.domains.ingestion.repository import IngestionJobRepository
 from app.core.s3 import S3Client
@@ -42,22 +47,29 @@ from app.core.s3 import S3Client
 logger = logging.getLogger(__name__)
 
 
+settings = get_settings()
+
+
 class IngestionService:
     def __init__(
         self,
         session: AsyncSession,
+        qdrant: AsyncQdrantClient,
         s3: S3Client,
         parser: DocumentParser,
         chunker: DocumentChunker,
+        embedding: EmbeddingPort,
         jobs_repo: IngestionJobRepository,
         documents_repo: DocumentRepository,
         chunks_repo: DocumentChunkRepository,
         versions_repo: DocumentVersionRepository,
     ):
         self.session = session
+        self.qdrant = qdrant
         self.s3 = s3
         self.parser = parser
         self.chunker = chunker
+        self.embedding = embedding
         self.jobs_repo = jobs_repo
         self.documents_repo = documents_repo
         self.chunks_repo = chunks_repo
@@ -85,9 +97,15 @@ class IngestionService:
             raise DocumentNotFoundError()
 
         try:
-            await self._start_job(job, document)
+            await self._start_job(
+                job,
+                document
+            )
 
-            file_bytes = await self._download(job, version)
+            file_bytes = await self._download(
+                job,
+                version
+            )
 
             parsed_document = await self._parse(
                 job,
@@ -95,32 +113,32 @@ class IngestionService:
                 file_bytes,
             )
 
-            logger.info(
-                "Document parsed "
-                "| job_id=%s sections=%s chars=%s",
-                job.id,
-                len(parsed_document.sections),
-                sum(
-                    len(section.text)
-                    for section in parsed_document.sections
-                ),
-            )
-
             chunks = await self._chunk(
                 job,
                 version,
                 parsed_document,
             )
-            self._print_chunks(chunks) # 디버깅
-            # 이거 다음 단계에서 구현할 것들임
-            #
-            # vectors = await self._embed(
-            #     chunks
-            # )
-            #
-            # await self._index(...)
-            #
-            # await self._complete(...)
+
+            self._print_chunks(chunks) # 디버깅, 로그도 좀 만들자
+
+            vectors = await self._embed(
+                job,
+                chunks
+            )
+
+            await self._index(
+                job,
+                document,
+                version,
+                chunks,
+                vectors,
+            )
+
+            await self._complete_job(
+                job,
+                document,
+                version,
+            )
 
             logger.info(
                 "Ingestion download completed "
@@ -156,6 +174,17 @@ class IngestionService:
 
         if not parsed.sections:
             raise NoTextExtractedError()
+
+        logger.info(
+            "Document parsed "
+            "| job_id=%s sections=%s chars=%s",
+            job.id,
+            len(parsed.sections),
+            sum(
+                len(section.text)
+                for section in parsed.sections
+            ),
+        )
 
         return parsed
 
@@ -200,6 +229,90 @@ class IngestionService:
         )
 
         return chunks
+
+
+    async def _embed(
+        self,
+        job: IngestionJob,
+        chunks: list[DocumentChunk],
+    ) -> list[list[float]]:
+        job.stage = IngestionStage.EMBEDDING
+
+        self.session.add(job)
+        await self.session.commit()
+
+        texts = [chunk.content for chunk in chunks]
+
+        embeddings = await self.embedding.embed(texts)
+
+        if len(embeddings) != len(chunks):
+            raise RuntimeError("Embedding count does not match chunk count")
+
+        logger.info(
+            "Document embedded "
+            "| job_id=%s chunks=%s",
+            job.id,
+            len(chunks),
+        )
+
+        return embeddings
+
+
+    async def _index(
+        self,
+        job: IngestionJob,
+        document: Document,
+        version: DocumentVersion,
+        chunks: list[DocumentChunk],
+        embeddings: list[list[float]],
+    ):
+        job.stage = IngestionStage.INDEXING
+
+        self.session.add(job)
+        await self.session.commit()
+
+        points = [
+            models.PointStruct(
+                id=chunk.id,
+                vector={
+                    "dense": embedding,
+                    "bm25": models.Document(
+                        text=chunk.content,
+                        model="qdrant/bm25",
+                    ),
+                },
+                payload={
+                    "workspace_id": document.workspace_id,
+                    "document_id": document.id,
+                    "document_version_id": version.id,
+                    "chunk_id": chunk.id,
+                    "chunk_index": chunk.chunk_index,
+                    "title": document.title,
+                    "content": chunk.content,
+                    "page_number": chunk.page_number,
+                    "section": chunk.section,
+                },
+            )
+            for chunk, embedding in zip(
+                chunks,
+                embeddings,
+                strict=True,
+            )
+        ]
+
+        await self.qdrant.upsert(
+            collection_name=settings.QDRANT_COLLECTION,
+            points=points,
+            wait=True,
+        )
+
+        logger.info(
+            "Document indexed "
+            "| job_id=%s version_id=%s points=%s",
+            job.id,
+            version.id,
+            len(points),
+        )
 
     # 디버깅용
     @staticmethod
@@ -323,6 +436,15 @@ class IngestionService:
         document: Document,
         version: DocumentVersion,
     ):
+        active_version = await self.versions_repo.get_active(document.id)
+
+        if (
+            active_version is not None
+            and active_version.id != version.id
+        ):
+            active_version.is_active = False
+            self.session.add(active_version)
+
         version.is_active = True
 
         document.current_version = version.version
@@ -330,6 +452,8 @@ class IngestionService:
         document.status = DocumentStatus.READY
 
         job.status = IngestionJobStatus.COMPLETED
+
+        job.stage = None
 
         job.completed_at = datetime.now(timezone.utc)
 
