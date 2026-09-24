@@ -13,6 +13,7 @@ dependencies = [
     "greenlet>=3.5.5",
     "httpx>=0.28.1",
     "llama-index-core>=0.14.24",
+    "openai>=3.17.0",
     "psycopg[binary]>=3.3.4",
     "pwdlib[argon2]>=0.3.1",
     "pydantic>=2.13.4",

@@ -69,11 +69,13 @@ class Settings(BaseSettings):
     AWS_S3_BUCKET: str
 
     # llm/embed-api + parameter
+    OPENAI_API_KEY: SecretStr
     OPENAI_EMBED_MODEL: str
     OPENAI_LLM_MODEL: str
     OPENAI_EMBED_MODEL: str
     OPENAI_EMBED_DIM: int
     OPENAI_EMBED_BATCH_SIZE: int
+    EMBEDDING_PROVIDER: str
 
     # 업로드 문서 관련 데이터들
     #---------------------
