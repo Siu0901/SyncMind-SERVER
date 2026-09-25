@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlmodel import select, desc
+from sqlmodel import select, desc, delete
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.document.model import (
@@ -127,9 +127,9 @@ class DocumentVersionRepository:
         return result.first()
 
     async def exists_by_content_hash(
-            self,
-            content_hash: str,
-            workspace_id: int,
+        self,
+        content_hash: str,
+        workspace_id: int,
     ) -> bool:
         statement = (select(DocumentVersion.id)
             .join(Document, DocumentVersion.id == Document.id)
@@ -171,4 +171,16 @@ class DocumentChunkRepository:
     async def create_many(self, chunks: list[DocumentChunk]):
         self.session.add_all(chunks)
 
+        await self.session.flush()
+
+    async def delete_by_version(self, document_version_id: int):
+        statement = (
+            delete(DocumentChunk)
+            .where(
+                DocumentChunk.document_version_id
+                == document_version_id
+            )
+        )
+
+        await self.session.exec(statement)
         await self.session.flush()
