@@ -4,8 +4,6 @@ from datetime import datetime, timezone
 
 from app.core.config import get_settings
 
-from qdrant_client import models
-from qdrant_client import AsyncQdrantClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.document.model import (
@@ -19,6 +17,7 @@ from app.domains.document.repository import (
     DocumentChunkRepository,
     DocumentVersionRepository,
 )
+from app.domains.document.vector_repository import QdrantVectorRepository
 from app.domains.document.exceptions import (
     DocumentNotFoundError,
     DocumentVersionNotFoundError,
@@ -54,7 +53,6 @@ class IngestionService:
     def __init__(
         self,
         session: AsyncSession,
-        qdrant: AsyncQdrantClient,
         s3: S3Client,
         parser: DocumentParser,
         chunker: DocumentChunker,
@@ -62,10 +60,10 @@ class IngestionService:
         jobs_repo: IngestionJobRepository,
         documents_repo: DocumentRepository,
         chunks_repo: DocumentChunkRepository,
+        vectors_repo: QdrantVectorRepository,
         versions_repo: DocumentVersionRepository,
     ):
         self.session = session
-        self.qdrant = qdrant
         self.s3 = s3
         self.parser = parser
         self.chunker = chunker
@@ -73,6 +71,7 @@ class IngestionService:
         self.jobs_repo = jobs_repo
         self.documents_repo = documents_repo
         self.chunks_repo = chunks_repo
+        self.vectors_repo = vectors_repo
         self.versions_repo = versions_repo
 
 
@@ -119,7 +118,7 @@ class IngestionService:
                 parsed_document,
             )
 
-            self._print_chunks(chunks) # 디버깅, 로그도 좀 만들자
+            # self._print_chunks(chunks) # 디버깅, 로그도 좀 만들자
 
             vectors = await self._embed(
                 job,
@@ -195,8 +194,12 @@ class IngestionService:
         version: DocumentVersion,
         parsed_document: ParsedDocument,
     ) -> list[DocumentChunk]:
+        job.stage = IngestionStage.CHUNKING
+
         self.session.add(job)
         await self.session.commit()
+
+        await self.chunks_repo.delete_by_version(version.id)
 
         chunk_data_list = self.chunker.chunk(parsed_document)
 
@@ -271,39 +274,11 @@ class IngestionService:
         self.session.add(job)
         await self.session.commit()
 
-        points = [
-            models.PointStruct(
-                id=chunk.id,
-                vector={
-                    "dense": embedding,
-                    "bm25": models.Document(
-                        text=chunk.content,
-                        model="qdrant/bm25",
-                    ),
-                },
-                payload={
-                    "workspace_id": document.workspace_id,
-                    "document_id": document.id,
-                    "document_version_id": version.id,
-                    "chunk_id": chunk.id,
-                    "chunk_index": chunk.chunk_index,
-                    "title": document.title,
-                    "content": chunk.content,
-                    "page_number": chunk.page_number,
-                    "section": chunk.section,
-                },
-            )
-            for chunk, embedding in zip(
-                chunks,
-                embeddings,
-                strict=True,
-            )
-        ]
-
-        await self.qdrant.upsert(
-            collection_name=settings.QDRANT_COLLECTION,
-            points=points,
-            wait=True,
+        await self.vectors_repo.upsert_chunks(
+            document=document,
+            version=version,
+            chunks=chunks,
+            embeddings=embeddings,
         )
 
         logger.info(
@@ -311,7 +286,7 @@ class IngestionService:
             "| job_id=%s version_id=%s points=%s",
             job.id,
             version.id,
-            len(points),
+            len(embeddings),
         )
 
     # 디버깅용
