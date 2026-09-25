@@ -1,6 +1,5 @@
-import enum
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlmodel import (
     Field,
@@ -11,20 +10,10 @@ from sqlmodel import (
     func,
 )
 
-
-class IngestionJobStatus(enum.StrEnum):
-    QUEUED = "queued"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-class IngestionStage(enum.StrEnum):
-    DOWNLOADING = "downloading"
-    PARSING = "parsing"
-    CHUNKING = "chunking"
-    EMBEDDING = "embedding"
-    INDEXING = "indexing"
+from app.domains.ingestion.enums import (
+    IngestionJobStatus,
+    IngestionStage,
+)
 
 
 class IngestionJob(SQLModel, table=True):
@@ -38,6 +27,7 @@ class IngestionJob(SQLModel, table=True):
     document_version_id: int = Field(
         foreign_key="document_version.id",
         index=True,
+        ondelete="CASCADE",
     )
 
     status: IngestionJobStatus = Field(

@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile
 
 from app.domains.document.dependencies import (
     CurrentDocumentDep,
     DocumentServiceDep,
+    DocumentUploadServiceDep,
 )
 from app.domains.document.schema import (
     DocumentChunkResponse,
@@ -61,6 +62,7 @@ async def delete_document(
     service: DocumentServiceDep,
 ):
     await service.delete_document(document)
+    return {"message": "Document deleted"}
 
 
 @document_router.get(
@@ -83,3 +85,19 @@ async def get_document_chunks(
     service: DocumentServiceDep,
 ):
     return await service.get_chunks(document)
+
+
+@document_router.post(
+    "/upload",
+    response_model=DocumentResponse,
+)
+async def upload_document(
+    workspace: CurrentWorkSpaceDep,
+    _: WorkspaceAdminDep,
+    file: UploadFile,
+    service: DocumentUploadServiceDep,
+):
+    return await service.upload(
+        workspace_id=workspace.id,
+        file=file,
+    )

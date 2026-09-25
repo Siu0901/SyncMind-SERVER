@@ -1,3 +1,4 @@
+from app import models
 import logging
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
