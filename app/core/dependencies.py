@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from arq import ArqRedis
-from qdrant_client.grpc import Qdrant
+from qdrant_client import AsyncQdrantClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.security import AuthManager
@@ -26,7 +26,7 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 RedisDep = Annotated[ArqRedis, Depends(get_redis)]
 
-QdrantDep = Annotated[Qdrant, Depends(get_qdrant)]
+QdrantDep = Annotated[AsyncQdrantClient, Depends(get_qdrant)]
 
 WorkerSessionDep = Annotated[AsyncSession, Depends(get_worker_session)]
 

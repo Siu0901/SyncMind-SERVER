@@ -6,6 +6,7 @@ from app.core.dependencies import (
     SessionDep,
     RedisDep,
     S3ClientDep,
+    QdrantDep
 )
 from app.domains.document.exceptions import DocumentNotFoundError
 from app.domains.document.model import Document
@@ -14,6 +15,7 @@ from app.domains.document.repository import (
     DocumentRepository,
     DocumentVersionRepository,
 )
+from app.domains.document.vector_repository import QdrantVectorRepository
 from app.domains.document.service import (
     DocumentService,
     DocumentUploadService,
@@ -31,6 +33,9 @@ def get_document_version_repository(session: SessionDep) -> DocumentVersionRepos
 def get_document_chunk_repository(session: SessionDep) -> DocumentChunkRepository:
     return DocumentChunkRepository(session)
 
+def get_qdrant_vector_repository(client: QdrantDep) -> QdrantVectorRepository:
+    return QdrantVectorRepository(client)
+
 DocumentRepositoryDep = Annotated[
     DocumentRepository,
     Depends(get_document_repository)
@@ -43,6 +48,10 @@ DocumentChunkRepositoryDep = Annotated[
     DocumentChunkRepository,
     Depends(get_document_chunk_repository)
 ]
+QdrantVectorRepositoryDep = Annotated[
+    QdrantVectorRepository,
+    Depends(get_qdrant_vector_repository)
+]
 
 
 def get_document_service(
@@ -50,6 +59,7 @@ def get_document_service(
     document_repository: DocumentRepositoryDep,
     version_repository: DocumentVersionRepositoryDep,
     chunk_repository: DocumentChunkRepositoryDep,
+    vector_repository: QdrantVectorRepositoryDep,
     s3: S3ClientDep,
 ) -> DocumentService:
     return DocumentService(
@@ -57,6 +67,7 @@ def get_document_service(
         documents_repo=document_repository,
         versions_repo=version_repository,
         chunks_repo=chunk_repository,
+        vector_repo=vector_repository,
         s3=s3,
     )
 
