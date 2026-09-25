@@ -21,6 +21,7 @@ from app.domains.document.repository import (
     DocumentRepository,
     DocumentVersionRepository,
 )
+from app.domains.document.vector_repository import QdrantVectorRepository
 from app.domains.document.schema import (
     DocumentCreateData,
     DocumentUpdateRequest,
@@ -53,12 +54,14 @@ class DocumentService:
         documents_repo: DocumentRepository,
         versions_repo: DocumentVersionRepository,
         chunks_repo: DocumentChunkRepository,
+        vector_repo: QdrantVectorRepository,
         s3: S3Client,
     ):
         self.session = session
         self.documents_repo = documents_repo
         self.versions_repo = versions_repo
         self.chunks_repo = chunks_repo
+        self.vector_repo = vector_repo
         self.s3 = s3
 
 
@@ -192,6 +195,8 @@ class DocumentService:
 
         try:
             await self.s3.delete_files(s3_keys)
+
+            await self.vector_repo.delete_by_document(document_id)
 
             await self.documents_repo.delete(document)
 

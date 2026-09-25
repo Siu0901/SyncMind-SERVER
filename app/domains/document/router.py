@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, status
+from fastapi import APIRouter, UploadFile
 
 from app.domains.document.dependencies import (
     CurrentDocumentDep,
@@ -54,7 +54,7 @@ async def update_document(
 ):
     return await service.update_document(document, data)
 
-# 이거 나중에 qdrant 짤때 되면 거기 데이터도 삭제되게 해야됨
+
 @document_router.delete("/delete/{document_id}")
 async def delete_document(
     document: CurrentDocumentDep,
