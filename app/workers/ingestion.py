@@ -7,6 +7,7 @@ from app.domains.document.repository import (
     DocumentChunkRepository,
     DocumentVersionRepository,
 )
+from app.domains.document.vector_repository import QdrantVectorRepository
 from app.domains.ingestion.repository import (
     IngestionJobRepository,
 )
@@ -27,7 +28,6 @@ async def process_document(
     async with get_worker_session() as session:
         service = IngestionService(
             session=session,
-            qdrant=get_qdrant(),
             s3=ctx["s3"],
             chunker=DocumentChunker(),
             embedding=ctx["embedding"],
@@ -35,6 +35,7 @@ async def process_document(
             jobs_repo=IngestionJobRepository(session),
             documents_repo=DocumentRepository(session),
             chunks_repo=DocumentChunkRepository(session),
+            vectors_repo=QdrantVectorRepository(get_qdrant()),
             versions_repo=DocumentVersionRepository(session),
         )
 
