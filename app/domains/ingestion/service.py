@@ -246,7 +246,7 @@ class IngestionService:
 
         texts = [chunk.content for chunk in chunks]
 
-        embeddings = await self.embedding.embed(texts)
+        embeddings = await self.embedding.embed_document(texts)
 
         if len(embeddings) != len(chunks):
             raise RuntimeError("Embedding count does not match chunk count")
