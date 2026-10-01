@@ -1,6 +1,6 @@
 from fastapi import APIRouter, status
 
-from app.domains.auth.dependencies import (
+from app.domains.identity.auth.dependencies import (
     CurrentUserDep,
 )
 from app.domains.workspace.dependencies import (

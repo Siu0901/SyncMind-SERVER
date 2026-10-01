@@ -15,15 +15,15 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from app.domains.auth.enums import OAuthProvider
-from app.domains.auth.exceptions import (
+from app.domains.identity.auth.enums import OAuthProvider
+from app.domains.identity.auth.exceptions import (
     InactiveUserError,
     InvalidOAuthStateError,
     OAuthEmailConflictError,
 )
-from app.domains.auth.model import OAuthAccount
-from app.domains.auth.schema import OAuthUserInfo
-from app.domains.user.model import User
+from app.domains.identity.auth.model import OAuthAccount
+from app.domains.identity.auth.schema import OAuthUserInfo
+from app.domains.identity.user.model import User
 
 pytestmark = pytest.mark.anyio
 

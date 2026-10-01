@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.domains.auth.dependencies import get_auth_service, get_oauth_service
-from app.domains.auth.exceptions import (
+from app.domains.identity.auth.dependencies import get_auth_service, get_oauth_service
+from app.domains.identity.auth.exceptions import (
     EmailAlreadyExistsError,
     InvalidCredentialsError,
     InvalidOAuthStateError,
@@ -24,9 +24,9 @@ from app.domains.auth.exceptions import (
     SessionExpiredError,
     TokenInvalidError,
 )
-from app.domains.auth.schema import IssuedTokens
-from app.domains.auth.service import AuthService
-from app.domains.auth.oauth.service import OAuthService
+from app.domains.identity.auth.schema import IssuedTokens
+from app.domains.identity.auth.service import AuthService
+from app.domains.identity.auth.oauth.service import OAuthService
 
 pytestmark = pytest.mark.anyio
 

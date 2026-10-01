@@ -15,23 +15,23 @@ from types import SimpleNamespace
 import pytest
 from fastapi.security import HTTPAuthorizationCredentials
 
-from app.domains.auth.dependencies import (
+from app.domains.identity.auth.dependencies import (
     get_auth_service,
     get_current_user,
     get_oauth_service,
 )
-from app.domains.auth.enums import OAuthProvider
-from app.domains.auth.exceptions import (
+from app.domains.identity.auth.enums import OAuthProvider
+from app.domains.identity.auth.exceptions import (
     InactiveUserError,
     OAuthProviderError,
     SessionExpiredError,
     TokenInvalidError,
 )
-from app.domains.auth.oauth.factory import OAuthClientFactory
-from app.domains.auth.oauth.github import GitHubOAuthClient
-from app.domains.auth.oauth.google import GoogleOAuthClient
-from app.domains.auth.oauth.service import OAuthService
-from app.domains.auth.service import AuthService
+from app.domains.identity.auth.oauth.factory import OAuthClientFactory
+from app.domains.identity.auth.oauth.adapter.github import GitHubOAuthClient
+from app.domains.identity.auth.oauth.adapter.google import GoogleOAuthClient
+from app.domains.identity.auth.oauth.service import OAuthService
+from app.domains.identity.auth.service import AuthService
 
 pytestmark = pytest.mark.anyio
 

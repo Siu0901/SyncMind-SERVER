@@ -15,7 +15,7 @@ import pytest
 from app.core.database import get_session
 from app.core.dependencies import get_auth_manager
 from app.core.redis import get_redis
-from app.domains.user.dependencies import get_user_repository
+from app.domains.identity.user.dependencies import get_user_repository
 
 pytestmark = pytest.mark.anyio
 

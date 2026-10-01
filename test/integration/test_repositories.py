@@ -8,11 +8,11 @@ TEST_DATABASE_URL 이 없으면 전부 skip 된다.
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.domains.auth.enums import OAuthProvider
-from app.domains.auth.model import OAuthAccount
-from app.domains.auth.repository import OAuthAccountRepository
-from app.domains.user.model import User
-from app.domains.user.repository import UserRepository
+from app.domains.identity.auth.enums import OAuthProvider
+from app.domains.identity.auth.model import OAuthAccount
+from app.domains.identity.auth.repository import OAuthAccountRepository
+from app.domains.identity.user.model import User
+from app.domains.identity.user.repository import UserRepository
 
 pytestmark = [pytest.mark.anyio, pytest.mark.integration]
 

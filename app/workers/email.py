@@ -2,7 +2,7 @@ import logging
 
 from fastapi_mail import NameEmail
 
-from app.domains.auth.email import EmailClient
+from app.domains.identity.auth.email import EmailClient
 
 
 logger = logging.getLogger(__name__)

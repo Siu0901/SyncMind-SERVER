@@ -19,16 +19,15 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 
-from app.domains.auth import oauth as oauth_pkg  # noqa: F401  (패키지 로드 보장)
-from app.domains.auth.enums import OAuthProvider
-from app.domains.auth.exceptions import (
+from app.domains.identity.auth import oauth as oauth_pkg  # noqa: F401  (패키지 로드 보장)
+from app.domains.identity.auth.enums import OAuthProvider
+from app.domains.identity.auth.exceptions import (
     OAuthEmailNotFoundError,
     OAuthProviderError,
 )
-from app.domains.auth.oauth import github as github_module
-from app.domains.auth.oauth import google as google_module
-from app.domains.auth.oauth.github import GitHubOAuthClient
-from app.domains.auth.oauth.google import GoogleOAuthClient
+from app.domains.identity.auth.oauth.adapter import google as google_module, github as github_module
+from app.domains.identity.auth.oauth.adapter.github import GitHubOAuthClient
+from app.domains.identity.auth.oauth.adapter.google import GoogleOAuthClient
 
 pytestmark = pytest.mark.anyio
 

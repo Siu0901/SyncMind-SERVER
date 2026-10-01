@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.core.database import get_session
-from app.domains.auth.dependencies import get_current_user
+from app.domains.identity.auth.dependencies import get_current_user
 from app.domains.workspace.dependencies import (
     get_workspace_member_repository,
     get_workspace_repository,

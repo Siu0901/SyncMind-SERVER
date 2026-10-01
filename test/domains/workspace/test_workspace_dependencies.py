@@ -153,11 +153,11 @@ class TestServiceFactory:
             session=mock_session,
             workspace_repo=mock_workspace_repo,
             members_repo=mock_member_repo,
-            user_repo=mock_user_repo,
+            users=mock_user_repo,
         )
 
         assert isinstance(service, WorkspaceService)
         assert service.session is mock_session
         assert service.workspaces_repo is mock_workspace_repo
         assert service.members_repo is mock_member_repo
-        assert service.users_repo is mock_user_repo
+        assert service.users is mock_user_repo

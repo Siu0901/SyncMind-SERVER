@@ -2,7 +2,7 @@ import logging
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.domains.auth.exceptions import UserNotFoundError
+from app.domains.identity.user.exceptions import UserNotFoundError
 from app.domains.workspace.exceptions import (
     CannotChangeWorkspaceOwnerRoleError,
     CannotRemoveWorkspaceOwnerError,
@@ -11,8 +11,8 @@ from app.domains.workspace.exceptions import (
     WorkspaceNotFoundError,
     WorkspacePermissionDeniedError,
 )
-from app.domains.user.model import User
-from app.domains.user.repository import UserRepository
+from app.domains.identity.user.model import User
+from app.domains.identity.user.service import UserQueryService
 from app.domains.workspace.enums import WorkspaceRole
 from app.domains.workspace.model import (
     WorkSpace,
@@ -39,12 +39,12 @@ class WorkspaceService:
         session: AsyncSession,
         workspaces_repo: WorkspaceRepository,
         members_repo: WorkspaceMemberRepository,
-        users_repo: UserRepository,
+        users: UserQueryService,
     ):
         self.session = session
         self.workspaces_repo = workspaces_repo
         self.members_repo = members_repo
-        self.users_repo = users_repo
+        self.users = users
 
 
     async def create_workspace(
@@ -126,7 +126,7 @@ class WorkspaceService:
         workspace_id: int,
         data: WorkspaceMemberAddRequest
     ) -> WorkSpaceMember:
-        user = await self.users_repo.get_by_id(data.user_id)
+        user = await self.users.get_by_id(data.user_id)
 
         if not user:
             raise UserNotFoundError(data.user_id)
