@@ -1,12 +1,13 @@
 from openai import AsyncOpenAI, OpenAIError
 
 from app.core.config import get_settings
+from app.infra.embedding.port import EmbeddingPort
 
 
 settings = get_settings()
 
 
-class OpenAIEmbeddingAdapter:
+class OpenAIEmbeddingAdapter(EmbeddingPort):
     def __init__(self, client: AsyncOpenAI):
         self.client = client
 
