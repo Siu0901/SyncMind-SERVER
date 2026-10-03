@@ -102,6 +102,16 @@ class Settings(BaseSettings):
     OVERLAP_RATIO: float = 0.12 # 오버랩 10~15%가 좋다해서 적절하게 12% 정도로 함
     MAX_PROTECTED_TOKENS: int = 2048
 
+    # 리랭킹
+    COHERE_API_KEY: SecretStr
+
+    RERANK_ENABLED: bool
+    RERANK_PROVIDER: str
+    RERANK_MODEL: str
+    RERANK_CANDIDATE_LIMIT: int
+    RERANK_TIMEOUT_SECONDS: float
+    RERANK_MAX_RETRIES: int
+
 
 @lru_cache
 def get_settings() -> Settings:
