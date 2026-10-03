@@ -1,4 +1,8 @@
 import httpx
+
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from cohere import AsyncClientV2
 from cohere.errors import (
     BadRequestError,
@@ -95,3 +99,22 @@ class CohereRerankerAdapter(RerankerPort):
             )
 
         return results
+
+
+@asynccontextmanager
+async def cohere_reranker_context(
+    api_key: str,
+    model: str,
+    timeout: float,
+    max_retries: int,
+) -> AsyncIterator[CohereRerankerAdapter]:
+    async with AsyncClientV2(
+        api_key=api_key,
+        client_name="syncmind",
+        timeout=timeout,
+        max_retries=max_retries,
+    ) as client:
+        yield CohereRerankerAdapter(
+            client=client,
+            model=model,
+        )
