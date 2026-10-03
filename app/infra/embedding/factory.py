@@ -42,7 +42,7 @@ def get_embedding() -> EmbeddingPort:
     return _embedding
 
 
-async def close_embedding() -> None:
+async def close_embedding():
     global _embedding
 
     if _embedding is not None:
