@@ -1,3 +1,5 @@
+from app import models
+
 from arq.connections import RedisSettings
 
 from app.core.qdrant import (
