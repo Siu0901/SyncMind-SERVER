@@ -2,14 +2,22 @@ from typing import Optional
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.domains.knowledge.document.model import DocumentStatus
 
 
 class SearchRequest(BaseModel):
-    query: str
-    limit: int = 10
+    query: str = Field(
+        min_length=1,
+        max_length=2000,
+    )
+
+    limit: int = Field(
+        default=10,
+        ge=1,
+        le=20,
+    )
 
 
 class RetrievalResult(BaseModel):
@@ -18,11 +26,23 @@ class RetrievalResult(BaseModel):
     chunk_id: int
     document_id: int
     document_version_id: int
+
     title: str
     content: str
+
     page_number: Optional[int] = None
     section: Optional[str] = None
-    score: float
+
+    retrieval_score: float
+    rerank_score: Optional[float] = None
+
+    @computed_field
+    @property
+    def score(self) -> float:
+        if self.rerank_score is not None:
+            return self.rerank_score
+
+        return self.retrieval_score
 
 
 class DocumentUpdateRequest(BaseModel):
