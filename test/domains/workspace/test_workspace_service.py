@@ -1,6 +1,6 @@
 import pytest
 
-from app.domains.auth.exceptions import UserNotFoundError
+from app.domains.identity.user.exceptions import UserNotFoundError
 from app.domains.workspace.enums import WorkspaceRole
 from app.domains.workspace.exceptions import (
     CannotChangeWorkspaceOwnerRoleError,

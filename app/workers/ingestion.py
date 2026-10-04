@@ -2,20 +2,20 @@ import logging
 
 from app.core.database import get_worker_session
 from app.core.qdrant import get_qdrant
-from app.domains.document.repository import (
+from app.domains.knowledge.document.repository import (
     DocumentRepository,
     DocumentChunkRepository,
     DocumentVersionRepository,
 )
-from app.domains.document.vector_repository import QdrantVectorRepository
-from app.domains.ingestion.repository import (
+from app.domains.knowledge.vector_repository import QdrantVectorRepository
+from app.domains.knowledge.ingestion.repository import (
     IngestionJobRepository,
 )
-from app.domains.ingestion.service import (
+from app.domains.knowledge.services.ingestion import (
     IngestionService,
 )
-from app.domains.ingestion.parsers.factory import DocumentParser
-from app.domains.ingestion.chunker.document_chunker import DocumentChunker
+from app.domains.knowledge.ingestion.parsers.factory import DocumentParser
+from app.domains.knowledge.ingestion.chunker.document_chunker import DocumentChunker
 
 
 logger = logging.getLogger(__name__)

@@ -102,5 +102,5 @@ def workspace_service(
         session=mock_session,
         workspaces_repo=mock_workspace_repo,
         members_repo=mock_member_repo,
-        users_repo=mock_user_repo,
+        users=mock_user_repo,
     )

@@ -9,11 +9,11 @@ from app.domains.workspace.exceptions import (
     WorkspacePermissionDeniedError,
     WorkspaceOwnerRequiredError
 )
-from app.domains.auth.dependencies import (
+from app.domains.identity.auth.dependencies import (
     CurrentUserDep,
 )
-from app.domains.user.dependencies import (
-    UserRepositoryDep,
+from app.domains.identity.user.dependencies import (
+    UserQueryServiceDep,
 )
 from app.domains.workspace.enums import (
     WorkspaceRole,
@@ -52,13 +52,13 @@ def get_workspace_service(
     session: SessionDep,
     workspace_repo: WorkSpaceRepositoryDep,
     members_repo: WorkSpaceMemberRepositoryDep,
-    user_repo: UserRepositoryDep,
+    users: UserQueryServiceDep,
 ) -> WorkspaceService:
     return WorkspaceService(
         session=session,
         workspaces_repo=workspace_repo,
         members_repo=members_repo,
-        users_repo=user_repo,
+        users=users,
     )
 
 WorkspaceServiceDep = Annotated[

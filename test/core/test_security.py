@@ -5,7 +5,7 @@ import jwt
 import pytest
 
 from app.core.security import AuthManager, TokenPayload
-from app.domains.auth.exceptions import TokenExpiredError, TokenInvalidError
+from app.domains.identity.auth.exceptions import TokenExpiredError, TokenInvalidError
 
 
 # 비밀번호 해싱

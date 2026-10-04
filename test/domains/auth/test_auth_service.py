@@ -15,7 +15,7 @@ import json
 
 import pytest
 
-from app.domains.auth.exceptions import (
+from app.domains.identity.auth.exceptions import (
     EmailAlreadyExistsError,
     ExpiredCodeOrRequestNotFoundError,
     InactiveUserError,
@@ -26,14 +26,14 @@ from app.domains.auth.exceptions import (
     SessionExpiredError,
     TokenInvalidError,
 )
-from app.domains.auth.schema import (
+from app.domains.identity.auth.schema import (
     IssuedTokens,
     LoginRequest,
     RegisterRequest,
     ResendEmailRequest,
     VerifyEmailRequest,
 )
-from app.domains.user.model import User
+from app.domains.identity.user.model import User
 
 # 이 모듈의 async 테스트는 anyio 플러그인이 돌린다. (conftest 상단 주석 참고)
 pytestmark = pytest.mark.anyio

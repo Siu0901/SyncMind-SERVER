@@ -11,8 +11,8 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import text
 
-from app.domains.user.model import User
-from app.domains.user.repository import UserRepository
+from app.domains.identity.user.model import User
+from app.domains.identity.user.repository import UserRepository
 from app.domains.workspace.enums import WorkspaceRole
 from app.domains.workspace.model import WorkSpace, WorkSpaceMember
 from app.domains.workspace.repository import (

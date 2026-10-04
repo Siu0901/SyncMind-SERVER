@@ -21,6 +21,13 @@ from app.core.qdrant import (
 )
 from app.core.log import setup_logging
 from app.core.exception.handlers import register_exception_handlers
+from app.infra.embedding.factory import (
+    close_embedding,
+    init_embedding,
+)
+from app.infra.reranking.factory import (
+    reranker_lifespan,
+)
 from app.api import router
 
 
@@ -41,12 +48,24 @@ async def lifespan(app: FastAPI):
     await ensure_collection()
     logger.info("Qdrant initialized")
 
-    yield
-    logger.info("Application shutdown")
+    init_embedding()
+    logger.info("Embedding initialized")
 
-    await close_session()
-    await close_redis()
-    await close_qdrant()
+    try:
+        async with reranker_lifespan() as reranker:
+            if reranker is None:
+                logger.info("Reranker disabled")
+            else:
+                logger.info("Reranker initialized")
+
+            yield
+    finally:
+        logger.info("Application shutdown")
+
+        await close_session()
+        await close_redis()
+        await close_qdrant()
+        await close_embedding()
 
 
 app = FastAPI(title="SyncMind", lifespan=lifespan)

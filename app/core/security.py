@@ -14,7 +14,7 @@ from pydantic import BaseModel, EmailStr
 
 from app.core.config import get_settings
 
-from app.domains.auth.exceptions import (
+from app.core.exception.security import (
     TokenExpiredError,
     TokenInvalidError,
 )

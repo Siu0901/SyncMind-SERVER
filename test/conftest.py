@@ -88,13 +88,13 @@ from sqlmodel.ext.asyncio.session import AsyncSession  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
 from app.core.security import AuthManager  # noqa: E402
-from app.domains.auth.oauth.base import OAuthClient  # noqa: E402
-from app.domains.auth.oauth.factory import OAuthClientFactory  # noqa: E402
-from app.domains.auth.oauth.service import OAuthService  # noqa: E402
-from app.domains.auth.repository import OAuthAccountRepository  # noqa: E402
-from app.domains.auth.service import AuthService  # noqa: E402
-from app.domains.user.model import User  # noqa: E402
-from app.domains.user.repository import UserRepository  # noqa: E402
+from app.domains.identity.auth.oauth.port import OAuthClient  # noqa: E402
+from app.domains.identity.auth.oauth.factory import OAuthClientFactory  # noqa: E402
+from app.domains.identity.auth.oauth.service import OAuthService  # noqa: E402
+from app.domains.identity.auth.repository import OAuthAccountRepository  # noqa: E402
+from app.domains.identity.auth.service import AuthService  # noqa: E402
+from app.domains.identity.user.model import User  # noqa: E402
+from app.domains.identity.user.repository import UserRepository  # noqa: E402
 
 
 # ===========================================================================
