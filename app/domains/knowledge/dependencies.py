@@ -1,6 +1,8 @@
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import Depends
+
+from app.core.config import get_settings
 
 from app.core.dependencies import (
     SessionDep,
@@ -23,8 +25,15 @@ from app.domains.knowledge.services.retrieval import RetrievalService
 from app.domains.knowledge.ingestion.repository import IngestionJobRepository
 from app.domains.knowledge.vector_repository import QdrantVectorRepository
 from app.domains.workspace.dependencies import CurrentWorkSpaceDep
+
 from app.infra.embedding.factory import get_embedding
 from app.infra.embedding.port import EmbeddingPort
+
+from app.infra.reranking.factory import get_reranker
+from app.infra.reranking.port import RerankerPort
+
+
+settings = get_settings()
 
 
 def get_document_repository(session: SessionDep) -> DocumentRepository:
@@ -38,7 +47,6 @@ def get_document_chunk_repository(session: SessionDep) -> DocumentChunkRepositor
 
 def get_vector_repository(client: QdrantDep) -> QdrantVectorRepository:
     return QdrantVectorRepository(client)
-
 
 def get_ingestion_job_repository(
     session: SessionDep,
@@ -64,6 +72,10 @@ QdrantVectorRepositoryDep = Annotated[
 EmbeddingDep = Annotated[
     EmbeddingPort,
     Depends(get_embedding),
+]
+RerankerDep = Annotated[
+    Optional[RerankerPort],
+    Depends(get_reranker),
 ]
 IngestionJobRepositoryDep = Annotated[
     IngestionJobRepository,
@@ -141,12 +153,16 @@ DocumentUploadServiceDep = Annotated[
 def get_retrieval_service(
     embedding: EmbeddingDep,
     vector_repo: QdrantVectorRepositoryDep,
+    reranker: RerankerDep,
 ) -> RetrievalService:
     return RetrievalService(
         embedding=embedding,
         vector_repo=vector_repo,
+        reranker=reranker,
+        rerank_candidate_limit=(
+            settings.RERANK_CANDIDATE_LIMIT
+        ),
     )
-
 
 RetrievalServiceDep = Annotated[
     RetrievalService,
