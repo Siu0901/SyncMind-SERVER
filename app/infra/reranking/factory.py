@@ -42,6 +42,11 @@ async def reranker_lifespan(
 
         return
 
+    raise RuntimeError(
+        "Unsupported reranker provider: "
+        f"{settings.RERANK_PROVIDER}"
+    )
+
 
 def get_reranker() -> Optional[RerankerPort]:
     if (
