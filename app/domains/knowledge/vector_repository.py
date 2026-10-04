@@ -115,6 +115,11 @@ class QdrantVectorRepository:
             ]
         )
 
+        prefetch_limit = max(
+            20,
+            limit,
+        )
+
         response = await self.client.query_points(
             collection_name=settings.QDRANT_COLLECTION,
 
@@ -123,7 +128,7 @@ class QdrantVectorRepository:
                     query=dense_vector,
                     using="dense",
                     filter=query_filter,
-                    limit=20,
+                    limit=prefetch_limit,
                 ),
 
                 models.Prefetch(
@@ -133,14 +138,12 @@ class QdrantVectorRepository:
                     ),
                     using="bm25",
                     filter=query_filter,
-                    limit=20,
+                    limit=prefetch_limit,
                 ),
             ],
-
             query=models.FusionQuery(
                 fusion=models.Fusion.RRF,
             ),
-
             limit=limit,
             with_payload=True,
         )
@@ -165,7 +168,8 @@ class QdrantVectorRepository:
                     section=payload.get(
                         "section"
                     ),
-                    score=point.score,
+                    retrieval_score=point.score,
+                    rerank_score=None,
                 )
             )
 
