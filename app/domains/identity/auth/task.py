@@ -2,8 +2,6 @@ import logging
 
 from fastapi_mail import NameEmail
 
-from app.domains.identity.auth.email import EmailClient
-
 
 logger = logging.getLogger(__name__)
 
@@ -12,8 +10,8 @@ async def send_verification_email(
     ctx,
     email: NameEmail,
     code: str,
-) -> None:
-    client = EmailClient()
+):
+    client = ctx["email_client"]
 
     try:
         await client.send_verification_email(

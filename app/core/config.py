@@ -112,6 +112,9 @@ class Settings(BaseSettings):
     RERANK_TIMEOUT_SECONDS: float
     RERANK_MAX_RETRIES: int
 
+    # 워커
+    document_queue_name: str = "arq:queue:document"
+    mail_queue_name: str = "arq:queue:mail"
 
 @lru_cache
 def get_settings() -> Settings:

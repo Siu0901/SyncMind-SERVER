@@ -43,7 +43,7 @@ pytestmark = pytest.mark.anyio
 # 1. 회원가입 인증코드 발송
 # ===========================================================================
 class TestRequestRegisterCode:
-    async def test_success(self, auth_service, mock_redis, mock_user_repo, auth_manager):
+    async def test_success(self, auth_service, mock_redis, mock_user_repo, auth_manager, settings):
         """정상 요청: redis 에 5분 TTL 로 저장 + 메일 발송 잡 enqueue."""
         mock_user_repo.get_by_email.return_value = None
 
@@ -76,6 +76,7 @@ class TestRequestRegisterCode:
             "send_verification_email",
             "newuser@example.com",
             payload["code"],
+            _queue_name=settings.mail_queue_name,
         )
 
     async def test_email_is_normalized(self, auth_service, mock_redis, mock_user_repo):
@@ -141,7 +142,7 @@ class TestResendRegisterCode:
 
     @pytest.mark.parametrize("as_bytes", [False, True])
     async def test_success_keeps_password_and_name(
-        self, auth_service, mock_redis, register_payload, as_bytes
+        self, auth_service, mock_redis, register_payload, as_bytes, settings
     ):
         """
         재발송 시 코드만 새로 만들고 password_hash / name 은 유지해야 한다.
@@ -171,6 +172,7 @@ class TestResendRegisterCode:
             "send_verification_email",
             "user@example.com",
             payload["code"],
+            _queue_name=settings.mail_queue_name,
         )
 
 

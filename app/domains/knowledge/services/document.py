@@ -373,6 +373,7 @@ class DocumentUploadService:
                 "process_document",
                 job.id,
                 _job_id=f"ingestion:{job.id}",
+                _queue_name=settings.document_queue_name,
             )
 
         except Exception:
