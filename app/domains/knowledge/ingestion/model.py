@@ -1,5 +1,6 @@
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 from sqlmodel import (
     Field,
@@ -38,6 +39,18 @@ class IngestionJob(SQLModel, table=True):
     stage: Optional[IngestionStage] = Field(default=None)
 
     retry_count: int = Field(default=0)
+
+    next_retry_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    lease_expires_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    execution_token: Optional[UUID] = Field(default=None)
+
+    error_code: Optional[str] = Field(default=None, max_length=64)
 
     error_message: Optional[str] = Field(
         default=None,

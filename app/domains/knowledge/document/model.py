@@ -169,7 +169,7 @@ class DocumentChunk(SQLModel, table=True):
     page_number: Optional[int] = Field(default=None)
     section: Optional[str] = Field(
         default=None,
-        max_length=500,
+        sa_column=Column(Text, nullable=True),
     )
     chunk_metadata: dict[str, Any] = Field(
         default_factory=dict,
