@@ -1,0 +1,117 @@
+# 검색 평가 질문셋과 근거 검토 기록
+
+- READY 문서: 31개 (workspace 1)
+- 원본 질문 중 READY 문서에 매칭된 질문: 149개
+- 도메인별 질문: {'public': 53, 'medical': 21, 'law': 34, 'commerce': 41}
+- 원본 CSV에서 승인한 텍스트 질문: 66문항 / 23개 문서
+- 1차 평가셋 도메인별: {'public': 26, 'medical': 8, 'law': 14, 'commerce': 18}
+- 처리 결과: {'separate_table_image': 65, 'approved_text': 66, 'excluded_bad_label': 16, 'missing_parsed_evidence': 2}
+- 질문이 없던 8개 문서에서 PDF 본문·활성 청크를 대조해 35문항을 직접 추가했다. 표·그림에만 근거한 질문은 추가하지 않았다.
+- **현재 평가 입력은 `cases_all_text.jsonl` 하나**다. 원본 CSV 승인 66개(`Q`), 직접 작성 35개(`M`)를 합친 101문항 / 31개 문서다.
+- 최종 도메인별 문항: 공공 43개, 커머스 23개, 의료 21개, 법률 14개.
+- 각 문항의 `case_source`로 출처를 구분하며, 질문·답·PDF 페이지·문서/버전 ID·확인한 근거 청크 원문을 한 파일에 보관한다.
+- `gold_chunk_ids`와 `gold_evidence`는 현재 DB 활성 버전에서 확인한 직접 근거 청크 ID·원문이다. 재색인하면 근거를 재검토하고 청크 ID를 다시 매핑해야 한다.
+- 이 ID들은 확인한 근거이지 전체 관련 청크의 완전한 목록이 아니다. Recall·Precision·nDCG 전에 검색 후보의 다른 관련 청크도 0/1/2로 판정해야 한다.
+- 답변에 여러 청크가 필요한 문항도 있다. 첫 관련 청크의 순위(MRR)만으로 답변 가능성을 판단하지 않는다.
+- 아래 목록은 원본 질문 중 제외·분리한 문항의 ID와 이유다. 질문 원문은 `eval/source/rag_evaluation_result.csv`에 남아 있다.
+- 원본 CSV 질문의 페이지 번호는 원본 데이터셋 기준이며, 청크 페이지는 ±1 차이를 허용했다.
+- 이는 평가셋 준비 결과이지 검색 성능 측정 결과가 아니다. 아직 Recall@K 등을 계산하지 않았다.
+- 현재 31개 READY 문서의 활성 버전만 Qdrant에 있다는 점은 사용자 확인 사항이다. 새 버전으로 재색인한다면 청크 근거를 다시 매핑해야 한다.
+- 오래된 의료 자료와 시점이 지난 통계는 현재 지침·최신 통계가 아니라 해당 자료의 내용으로만 질문했다.
+
+## 직접 작성한 질문으로 보완한 문서
+
+- (240411보도자료) 재정동향 4월호.pdf: 5문항
+- 240319 알기쉬운 청년농신보 책자(최종본)★_배포용.pdf: 4문항
+- 240418 도로터널 결로대책 가이드라인(최종).pdf: 5문항
+- MezzoMedia 산업 보고서 e커머스.pdf: 5문항
+- 전문교육기관ᆞ항공훈련기관 지정ᆞ인가 및 안전관리 현황__.pdf: 3문항
+- 08 알기 쉬운 대장암.pdf: 5문항
+- 2014_08.pdf: 4문항
+- 20080813_E_2.pdf: 4문항
+
+## 제외·분리 문항
+
+- Q0061 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0062 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0063 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0064 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0065 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0066 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0067 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0069 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0070 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0071 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0072 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0073 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0074 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0075 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0077 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0078 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0079 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0080 (public, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0106 (public, excluded_bad_label): 정답이 0.7조원을 2024년 총액처럼 서술하지만 원문은 정책자금의 전년 대비 증가분이다.
+- Q0107 (public, excluded_bad_label): 질문은 정부 지원 총액을 요구하지만 원문과 정답에는 지원 비율만 있다.
+- Q0110 (public, excluded_bad_label): 질문의 2023년 12월 회의 예정이라는 시점 표현이 원문의 회의 교류 사실과 맞지 않는다.
+- Q0112 (public, separate_table_image): 원문 근거가 항공·공항 현황 표이며 청크가 표 셀을 평탄화해 저장했다.
+- Q0113 (public, excluded_bad_label): 교통 인프라의 경제적 영향은 원문 해당 근거에서 확인되지 않는다.
+- Q0114 (public, excluded_bad_label): 투자법 개정과 2024년 경제대국 지위 재탈환 사이의 인과관계는 원문에 없다.
+- Q0115 (public, excluded_bad_label): 원문은 2023년 수출 실적을 기록한 것으로 쓰지만 정답은 예상치라고 서술한다.
+- Q0119 (public, missing_parsed_evidence): 원본 PDF 해당 페이지와 근처 DB 청크에서 답변 근거 텍스트를 찾지 못함
+- Q0120 (public, missing_parsed_evidence): 원본 PDF 해당 페이지와 근처 DB 청크에서 답변 근거 텍스트를 찾지 못함
+- Q0123 (medical, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0124 (medical, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0125 (medical, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0127 (medical, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0128 (medical, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0129 (medical, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0130 (medical, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0135 (medical, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0155 (medical, separate_table_image): 검사별 장단점이 원문 표에 있고 청크의 열 경계가 무너져 속성 귀속이 모호하다.
+- Q0156 (medical, excluded_bad_label): 정답의 분변잠혈검사로 인한 사망률 감소 설명이 해당 원문과 청크에서 확인되지 않는다.
+- Q0157 (medical, separate_table_image): 정답의 연령대별 숫자가 그래프에서 추출되었다.
+- Q0171 (medical, excluded_bad_label): 원문의 36%와 78%는 유증상·무증상 환자 비율이 아니라 각 집단의 조기위암 비율이다.
+- Q0172 (medical, excluded_bad_label): 질문은 상대위험도 영향을 묻지만 정답은 조기 발견·치료 가능 비율만 제시한다.
+- Q0189 (law, excluded_bad_label): 정답의 감형이 확정되었다는 서술은 원문의 판결 확정과 다르다.
+- Q0190 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0192 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0194 (law, excluded_bad_label): 질문은 연금 감액의 요건을 묻지만 정답은 제재의 취지 위주로 서술한다.
+- Q0211 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0212 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0214 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0215 (law, excluded_bad_label): 질문의 2023년부터라는 시행 시점이 해당 세제 개정 내용과 명확히 맞지 않는다.
+- Q0217 (law, excluded_bad_label): 질문은 2023년 소득세법 개정이라고 하나 원문은 2022년 개정세법으로 표시한다.
+- Q0219 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0220 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0229 (law, excluded_bad_label): 정답에 조항 번호가 누락되고 피고 주장과 법원 판단의 관계가 흐려져 기준 답변으로 부적합하다.
+- Q0230 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0231 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0232 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0233 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0234 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0235 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0236 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0240 (law, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0254 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0256 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0257 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0258 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0259 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0260 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0262 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0264 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0265 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0266 (commerce, separate_table_image): 채널 순위와 비율이 원문 표에 있다.
+- Q0267 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0268 (commerce, separate_table_image): 서비스 이용률과 선택 이유가 원문 그래프에 있다.
+- Q0269 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0270 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0271 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0272 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0274 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0275 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0278 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0279 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0280 (commerce, excluded_bad_label): 정답의 실제 상담원과 맞닿은 듯한 경험이라는 설명은 원문의 아바톡 기능 설명에서 직접 확인되지 않는다.
+- Q0283 (commerce, separate_table_image): 원본 데이터셋의 context_type이 table 또는 image임
+- Q0288 (commerce, excluded_bad_label): 정답의 재고 부족으로 인한 시간·노력 절감은 해당 원문의 직접 근거가 아닌 확장 해석이다.
