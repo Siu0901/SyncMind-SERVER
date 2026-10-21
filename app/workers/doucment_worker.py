@@ -1,5 +1,7 @@
 from app import models
 
+import logging
+
 from arq.connections import RedisSettings
 
 from app.core.qdrant import (
@@ -9,8 +11,7 @@ from app.core.qdrant import (
 from app.core.log import setup_logging
 from app.core.config import get_settings
 from app.core.s3 import S3Client
-from app.workers.email import send_verification_email
-from app.workers.ingestion import process_document
+from app.domains.knowledge.task import process_document
 from app.infra.embedding.factory import (
     close_embedding,
     init_embedding,
@@ -18,6 +19,8 @@ from app.infra.embedding.factory import (
 
 
 settings = get_settings()
+
+log = logging.getLogger(__name__)
 
 
 async def startup(ctx):
@@ -28,18 +31,25 @@ async def startup(ctx):
 
     await init_qdrant()
 
+    log.info(
+        "문서 워커 기동 — queue=%s",
+        settings.document_queue_name,
+    )
+
 
 async def shutdown(ctx):
     await close_qdrant()
     await close_embedding()
 
+    log.info("문서 워커 종료")
 
-class WorkerSettings:
+
+class DocumentWorkerSettings:
     functions = [
-        send_verification_email,
         process_document,
     ]
 
+    queue_name = get_settings().document_queue_name
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
 
     on_startup = startup

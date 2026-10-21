@@ -83,6 +83,7 @@ class AuthService:
             "send_verification_email",
             email,
             code,
+            _queue_name=settings.mail_queue_name,
         )
 
 
@@ -110,6 +111,7 @@ class AuthService:
             "send_verification_email",
             email,
             code,
+            _queue_name=settings.mail_queue_name,
         )
 
 
