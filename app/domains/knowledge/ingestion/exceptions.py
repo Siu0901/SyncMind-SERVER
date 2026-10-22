@@ -87,3 +87,9 @@ class NoS3KeyVersionsError(AppException):
             f"| version_id={version_id}",
             404
         )
+
+class IngestionLeaseLostError(RuntimeError):
+    def __init__(self, job_id: int):
+        super().__init__(
+            f"Ingestion execution ownership lost | job_id={job_id}"
+        )
