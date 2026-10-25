@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import timedelta
 from uuid import UUID
 
-from sqlmodel import select, and_, func, or_, update
+from sqlmodel import select, func, update
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.knowledge.ingestion.model import IngestionJob
@@ -11,6 +11,7 @@ from app.domains.knowledge.ingestion.enums import (
     IngestionJobStatus,
     IngestionStage,
 )
+from app.domains.knowledge.document.model import DocumentVersion
 
 
 class IngestionJobRepository:
@@ -37,25 +38,11 @@ class IngestionJobRepository:
         execution_token: UUID,
         lease_duration: timedelta,
     ) -> bool:
-        eligible = or_(
-            IngestionJob.status == IngestionJobStatus.QUEUED,
-
-            and_(
-                IngestionJob.status == IngestionJobStatus.RETRY_WAIT,
-                IngestionJob.next_retry_at <= func.now(),
-            ),
-
-            and_(
-                IngestionJob.status == IngestionJobStatus.PROCESSING,
-                IngestionJob.lease_expires_at <= func.now(),
-            ),
-        )
-
         statement = (
             update(IngestionJob)
             .where(
                 IngestionJob.id == job_id,
-                eligible,
+                IngestionJob.status == IngestionJobStatus.QUEUED,
             )
             .values(
                 status=IngestionJobStatus.PROCESSING,
@@ -72,8 +59,47 @@ class IngestionJobRepository:
             .execution_options(synchronize_session=False)
         )
 
-        result =  await self.session.exec(statement)
+        result = await self.session.exec(statement)
         return result.first() is not None
+
+
+    async def cancel_for_document(
+        self,
+        document_id: int,
+        reason: str,
+        error_message: Optional[str],
+    ):
+        version_ids = select(DocumentVersion.id).where(
+            DocumentVersion.document_id == document_id,
+        )
+
+        statement = (
+            update(IngestionJob)
+            .where(
+                IngestionJob.document_version_id.in_(version_ids),
+                IngestionJob.status.in_(
+                    [
+                        IngestionJobStatus.QUEUED,
+                        IngestionJobStatus.PROCESSING,
+                        IngestionJobStatus.RETRY_WAIT,
+                    ]
+                ),
+            )
+            .values(
+                status=IngestionJobStatus.FAILED,
+                execution_token=None,
+                lease_expires_at=None,
+                next_retry_at=None,
+                completed_at=func.now(),
+                error_code=reason,
+                error_message=(
+                    error_message[:2000] if error_message else None
+                ),
+            )
+            .execution_options(synchronize_session=False)
+        )
+
+        await self.session.exec(statement)
 
 
     @staticmethod
@@ -155,24 +181,4 @@ class IngestionJobRepository:
             execution_token=None,
             error_code=None,
             error_message=None,
-        )
-
-
-    async def fail_if_owned(
-        self,
-        job_id: int,
-        execution_token: UUID,
-        error_code: str,
-        error_message: str,
-    ) -> bool:
-        return await self._update_owned(
-            job_id,
-            execution_token,
-            status=IngestionJobStatus.FAILED,
-            completed_at=func.now(),
-            next_retry_at=None,
-            lease_expires_at=None,
-            execution_token=None,
-            error_code=error_code,
-            error_message=error_message[:2000],
         )
