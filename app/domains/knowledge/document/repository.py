@@ -1,5 +1,7 @@
 from typing import Optional
 
+from datetime import datetime, timezone
+
 from sqlmodel import select, desc, delete, update
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -27,6 +29,7 @@ class DocumentRepository:
         statement = select(Document).where(
             Document.id == document_id,
             Document.workspace_id == workspace_id,
+            Document.deleted_at.is_(None),
         )
 
         result = await self.session.exec(statement)
@@ -46,8 +49,8 @@ class DocumentRepository:
     async def get_all(self, workspace_id: int) -> list[Document]:
         statement = (select(Document)
             .where(
-                Document.workspace_id
-                == workspace_id
+                Document.workspace_id == workspace_id,
+                Document.deleted_at.is_(None),
             )
             .order_by(desc(Document.updated_at))
         )
@@ -64,6 +67,7 @@ class DocumentRepository:
         statement = select(Document).where(
             Document.source_id == source_id,
             Document.external_id == external_id,
+            Document.deleted_at.is_(None),
         )
 
         result = await self.session.exec(statement)
@@ -125,6 +129,59 @@ class DocumentRepository:
         await self.session.flush()
 
 
+    async def mark_removed(
+        self,
+        document_id: int,
+        failed: bool,
+    ):
+        document = await self.get_for_update(document_id)
+
+        if document is None:
+            return
+
+        document.deleted_at = datetime.now(timezone.utc)
+
+        if failed and document.current_version is None:
+            document.status = DocumentStatus.FAILED
+
+        self.session.add(document)
+        await self.session.flush()
+
+
+    async def delete_by_id(self, document_id: int):
+        statement = delete(Document).where(
+            Document.id == document_id,
+        )
+        await self.session.exec(statement)
+
+    async def get_searchable_version_ids(
+        self,
+        workspace_id: int,
+        version_ids: list[int],
+    ) -> set[int]:
+        if not version_ids:
+            return set()
+
+        statement = (
+            select(DocumentVersion.id)
+            .join(
+                Document,
+                Document.id == DocumentVersion.document_id,
+            )
+            .where(
+                Document.workspace_id == workspace_id,
+                Document.deleted_at.is_(None),
+                Document.status == DocumentStatus.READY,
+                DocumentVersion.is_active.is_(True),
+                DocumentVersion.id.in_(version_ids),
+            )
+        )
+
+        return set(
+            (await self.session.exec(statement)).all()
+        )
+
+
 class DocumentVersionRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -179,11 +236,13 @@ class DocumentVersionRepository:
         content_hash: str,
         workspace_id: int,
     ) -> bool:
-        statement = (select(DocumentVersion.id)
+        statement = (
+            select(DocumentVersion.id)
             .join(Document, DocumentVersion.document_id == Document.id)
             .where(
             Document.workspace_id == workspace_id,
-                    DocumentVersion.content_hash == content_hash
+                    DocumentVersion.content_hash == content_hash,
+                    Document.deleted_at.is_(None),
             )
             .limit(1)
         )
@@ -259,7 +318,7 @@ class DocumentChunkRepository:
     ) -> list[DocumentChunk]:
         statement = (
             select(DocumentVersion)
-            .where(DocumentVersion.document_id == version_id)
+            .where(DocumentVersion.id == version_id)
             .with_for_update()
             .execution_options(populate_existing=True)
         )
