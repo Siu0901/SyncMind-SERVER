@@ -59,14 +59,29 @@ class S3Client:
 
 
     async def delete_files(self, keys: list[str]):
+        keys = list(dict.fromkeys(keys))
+
+        if not keys:
+            return
+
         async with self.session.client("s3") as s3_client:
-            await s3_client.delete_objects(
-                Bucket=self.bucket,
-                Delete={
-                    "Objects": [
-                        {"Key": key}
-                        for key in keys
-                    ],
-                    "Quiet": True,
-                },
-            )
+            for offset in range(0, len(keys), 1000):
+                batch = keys[offset:offset + 1000]
+
+                response = await s3_client.delete_objects(
+                    Bucket=self.bucket,
+                    Delete={
+                        "Objects": [
+                            {"Key": key}
+                            for key in batch
+                        ],
+                        "Quiet": True,
+                    },
+                )
+
+                errors = response.get("Errors", [])
+
+                if errors:
+                    raise RuntimeError(
+                        f"S3 object deletion failed: {errors}"
+                    )
