@@ -1,4 +1,4 @@
-from openai import AsyncOpenAI, OpenAIError
+from openai import AsyncOpenAI
 
 from app.core.config import get_settings
 from app.infra.embedding.port import EmbeddingPort
@@ -45,19 +45,13 @@ class OpenAIEmbeddingAdapter(EmbeddingPort):
 
 
     async def _embed(self, texts: list[str]) -> list[list[float]]:
-        try:
-            response = await self.client.embeddings.create(
-                model=settings.OPENAI_EMBED_MODEL,
-                input=texts,
-                dimensions=settings.EMBEDDING_DIMENSION,
-            )
+        response = await self.client.embeddings.create(
+            model=settings.OPENAI_EMBED_MODEL,
+            input=texts,
+            dimensions=settings.EMBEDDING_DIMENSION,
+        )
 
-        except OpenAIError:
-            raise OpenAIError()
-
-        vectors = [
+        return [
             list(vector.embedding)
             for vector in response.data
         ]
-
-        return vectors
