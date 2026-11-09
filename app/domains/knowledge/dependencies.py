@@ -22,6 +22,7 @@ from app.domains.knowledge.services.document import (
     DocumentUploadService,
 )
 from app.domains.knowledge.services.retrieval import RetrievalService
+from app.domains.knowledge.services.operation import DocumentOperationService
 from app.domains.knowledge.ingestion.repository import IngestionJobRepository
 from app.domains.knowledge.vector_repository import QdrantVectorRepository
 from app.domains.knowledge.services.lifecycle import DocumentLifecycleService
@@ -87,6 +88,18 @@ IngestionJobRepositoryDep = Annotated[
 DocumentOperationRepositoryDep = Annotated[
     DocumentOperationRepository,
     Depends(get_document_operation_repository),
+]
+
+
+def get_document_operation_service(
+    repository: DocumentOperationRepositoryDep,
+) -> DocumentOperationService:
+    return DocumentOperationService(repository=repository)
+
+
+DocumentOperationServiceDep = Annotated[
+    DocumentOperationService,
+    Depends(get_document_operation_service),
 ]
 
 

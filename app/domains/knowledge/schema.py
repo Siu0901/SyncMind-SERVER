@@ -72,6 +72,14 @@ class DocumentResponse(BaseModel):
     updated_at: datetime
 
 
+class DocumentOperationResponse(BaseModel):
+    document_id: int
+    title: str
+    status: str
+    message: Optional[str] = None
+    cleanup_pending: bool
+
+
 class DocumentVersionResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
