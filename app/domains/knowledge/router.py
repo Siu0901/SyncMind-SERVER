@@ -1,10 +1,13 @@
 from fastapi import APIRouter, UploadFile
 
+from app.core.exception.exceptions import AppException
+from app.domains.knowledge.operation.model import OperationStatus
 from app.domains.knowledge.dependencies import (
     CurrentDocumentDep,
     DocumentServiceDep,
     DocumentUploadServiceDep,
     RetrievalServiceDep,
+    DocumentOperationRepositoryDep
 )
 from app.domains.knowledge.schema import (
     SearchRequest,
@@ -57,14 +60,17 @@ async def update_document(
     return await service.update_document(document, data)
 
 
-@document_router.delete("/delete/{document_id}")
+@document_router.delete(
+    "/delete/{document_id}",
+    status_code=202,
+)
 async def delete_document(
     document: CurrentDocumentDep,
     _: WorkspaceAdminDep,
     service: DocumentServiceDep,
 ):
     await service.delete_document(document)
-    return {"message": "Document deleted"}
+    return {"message": "문서 삭제 요청을 접수했습니다."}
 
 
 @document_router.get(
@@ -92,6 +98,7 @@ async def get_document_chunks(
 @document_router.post(
     "/upload",
     response_model=DocumentResponse,
+    status_code=202,
 )
 async def upload_document(
     workspace: CurrentWorkSpaceDep,
@@ -119,3 +126,44 @@ async def search_documents(
         query=request.query,
         limit=request.limit,
     )
+
+
+@document_router.get("/operations/{document_id}")
+async def get_document_operation(
+    document_id: int,
+    workspace: CurrentWorkSpaceDep,
+    repository: DocumentOperationRepositoryDep
+):
+    operation = await repository.get(
+        document_id=document_id,
+        workspace_id=workspace.id,
+    )
+
+    if operation is None:
+        raise AppException("작업을 찾을 수 없습니다.", 404)
+
+    if operation.reason == "USER_DELETE":
+        status = (
+            "deleted"
+            if operation.status == OperationStatus.DELETED
+            else "deleting"
+        )
+        message = None
+
+    elif operation.reason is not None:
+        status = "failed"
+        message = "문서 처리에 실패했습니다."
+
+    else:
+        status = operation.status
+        message = None
+
+    return {
+        "document_id": operation.document_id,
+        "title": operation.title,
+        "status": status,
+        "message": message,
+        "cleanup_pending": (
+            operation.status == OperationStatus.CLEANUP_REQUIRED
+        ),
+    }
