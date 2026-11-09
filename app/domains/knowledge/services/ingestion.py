@@ -10,7 +10,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domains.knowledge.document.model import (
     Document,
-    DocumentStatus,
     DocumentVersion,
     DocumentChunk,
 )
@@ -26,7 +25,6 @@ from app.domains.knowledge.document.exceptions import (
 )
 from app.domains.knowledge.ingestion.enums import (
     IngestionStage,
-    IngestionJobStatus,
 )
 from app.domains.knowledge.ingestion.schema import (
     ParsedDocument,
@@ -40,6 +38,13 @@ from app.domains.knowledge.ingestion.exceptions import (
 )
 from app.domains.knowledge.ingestion.parsers.factory import DocumentParser
 from app.domains.knowledge.ingestion.chunker.document_chunker import DocumentChunker
+from app.domains.knowledge.operation.model import OperationStatus
+from app.domains.knowledge.operation.repository import (
+    DocumentOperationRepository,
+)
+from app.domains.knowledge.services.lifecycle import (
+    DocumentLifecycleService,
+)
 from app.infra.embedding.port import EmbeddingPort
 from app.domains.knowledge.ingestion.model import IngestionJob
 from app.domains.knowledge.ingestion.repository import IngestionJobRepository
@@ -56,6 +61,8 @@ class IngestionService:
 
     LEASE_DURATION = timedelta(seconds=900)
 
+    PROCESS_TIMEOUT_SECONDS = 540
+
     def __init__(
         self,
         session: AsyncSession,
@@ -68,6 +75,8 @@ class IngestionService:
         chunks_repo: DocumentChunkRepository,
         vectors_repo: QdrantVectorRepository,
         versions_repo: DocumentVersionRepository,
+        operations_repo: DocumentOperationRepository,
+        lifecycle: DocumentLifecycleService,
     ):
         self.session = session
         self.s3 = s3
@@ -79,12 +88,15 @@ class IngestionService:
         self.chunks_repo = chunks_repo
         self.vectors_repo = vectors_repo
         self.versions_repo = versions_repo
+        self.operations = operations_repo
         self.execution_token: UUID = uuid4()
+        self.lifecycle = lifecycle
 
 
-    async def process(self, job_id: int):
-        self.execution_token = uuid4()
-
+    async def process(
+        self,
+        job_id: int,
+    ):
         job = await self.jobs_repo.get_by_id(job_id)
 
         if job is None:
@@ -106,53 +118,45 @@ class IngestionService:
 
         document_id = document.id
 
-        started = await self._start_job(job_id, document_id)
+        started = await self._start_job(
+            job_id,
+            document_id,
+        )
 
         if not started:
-            logger.info(
-                "Ingestion skipped | job_id=%s",
-                job_id,
-            )
             return
 
         try:
-            file_bytes = await self._download(
-                job,
-                version
-            )
+            async with asyncio.timeout(self.PROCESS_TIMEOUT_SECONDS):
+                file_bytes = await self._download(job, version)
 
-            parsed_document = await self._parse(
-                job,
-                version,
-                file_bytes,
-            )
+                parsed_document = await self._parse(
+                    job,
+                    version,
+                    file_bytes,
+                )
 
-            chunks = await self._chunk(
-                job,
-                version,
-                parsed_document,
-            )
+                chunks = await self._chunk(
+                    job,
+                    version,
+                    parsed_document,
+                )
 
-            # self._print_chunks(chunks) # 디버깅, 로그도 좀 만들자
+                embeddings = await self._embed(job, chunks)
 
-            vectors = await self._embed(
-                job,
-                chunks
-            )
+                await self._index(
+                    job,
+                    document,
+                    version,
+                    chunks,
+                    embeddings,
+                )
 
-            await self._index(
-                job,
-                document,
-                version,
-                chunks,
-                vectors,
-            )
-
-            await self._complete_job(
-                job_id,
-                document_id,
-                version,
-            )
+                await self._complete_job(
+                    job_id,
+                    document_id,
+                    version,
+                )
 
         except IngestionLeaseLostError:
             await self.session.rollback()
@@ -166,25 +170,23 @@ class IngestionService:
             await self.session.rollback()
 
             try:
-                await self._fail_job(
-                    job_id,
+                requested = await self.lifecycle.request_cleanup(
                     document_id,
-                    exc,
+                    reason="PROCESSING_FAILED",
+                    error_message=str(exc),
+                    owner_token=self.execution_token,
                 )
 
-            except IngestionLeaseLostError:
-                await self.session.rollback()
-
-                logger.info(
-                    "Failure update skipped: ownership lost | job_id=%s",
-                    job_id,
-                )
+                if requested:
+                    await self.lifecycle.maintain(document_id)
 
             except Exception:
                 await self.session.rollback()
 
                 logger.exception(
-                    "Failed to persist ingestion failure | job_id=%s",
+                    "Failed to compensate ingestion "
+                    "| document_id=%s job_id=%s",
+                    document_id,
                     job_id,
                 )
 
@@ -196,6 +198,15 @@ class IngestionService:
         job_id: int,
         document_id: int,
     ) -> bool:
+        operation = await self.operations.lock(document_id)
+
+        if (
+            operation is None
+            or operation.status != OperationStatus.QUEUED
+        ):
+            await self.session.rollback()
+            return False
+
         claimed = await self.jobs_repo.try_claim(
             job_id,
             self.execution_token,
@@ -210,13 +221,22 @@ class IngestionService:
             document_id
         )
 
-        if document is None:
-            raise DocumentNotFoundError()
+        if document is None or document.deleted_at is not None:
+            await self.session.rollback()
+            return False
 
         await self.documents_repo.mark_processing(document)
 
-        await self.session.commit()
+        await self.operations.change(
+            operation,
+            status=OperationStatus.PROCESSING,
+            next_run_at=(
+                datetime.now(timezone.utc)
+                + self.lifecycle.PROCESSING_DEADLINE
+            ),
+        )
 
+        await self.session.commit()
         return True
 
 
@@ -341,19 +361,21 @@ class IngestionService:
             IngestionStage.INDEXING,
         )
 
+        operation = await self.operations.lock(document.id)
+
+        if (
+            operation is None
+            or operation.status != OperationStatus.PROCESSING
+        ):
+            raise IngestionLeaseLostError(job.id)
+
+        await self._ensure_owned(job.id)
+
         await self.vectors_repo.upsert_chunks(
             document=document,
             version=version,
             chunks=chunks,
             embeddings=embeddings,
-        )
-
-        logger.info(
-            "Document indexed "
-            "| job_id=%s version_id=%s points=%s",
-            job.id,
-            version.id,
-            len(embeddings),
         )
 
 
@@ -363,6 +385,14 @@ class IngestionService:
         document_id: int,
         version: DocumentVersion,
     ):
+        operation = await self.operations.lock(document_id)
+
+        if (
+            operation is None
+            or operation.status != OperationStatus.PROCESSING
+        ):
+            raise IngestionLeaseLostError(job_id)
+
         await self._ensure_owned(job_id)
 
         document = await self.documents_repo.get_for_update(
@@ -393,35 +423,11 @@ class IngestionService:
         if not completed:
             raise IngestionLeaseLostError(job_id)
 
-        await self.session.commit()
-
-
-    async def _fail_job(
-        self,
-        job_id: int,
-        document_id: int,
-        exc: Exception,
-    ):
-        await self._ensure_owned(job_id)
-
-        document = await self.documents_repo.get_for_update(
-            document_id
+        await self.operations.change(
+            operation,
+            status=OperationStatus.READY,
+            next_run_at=None,
         )
-
-        if document is None:
-            raise DocumentNotFoundError()
-
-        await self.documents_repo.mark_ingestion_failed(document)
-
-        failed = await self.jobs_repo.fail_if_owned(
-            job_id,
-            self.execution_token,
-            error_code="PROCESSING_ERROR",
-            error_message=str(exc),
-        )
-
-        if not failed:
-            raise IngestionLeaseLostError(job_id)
 
         await self.session.commit()
 
