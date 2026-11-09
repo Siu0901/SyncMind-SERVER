@@ -13,3 +13,4 @@ from app.domains.chat.model import (
     ChatMessage,
     MessageCitation,
 )
+from app.domains.knowledge.operation.model import DocumentOperation
