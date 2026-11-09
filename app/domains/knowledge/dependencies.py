@@ -24,6 +24,8 @@ from app.domains.knowledge.services.document import (
 from app.domains.knowledge.services.retrieval import RetrievalService
 from app.domains.knowledge.ingestion.repository import IngestionJobRepository
 from app.domains.knowledge.vector_repository import QdrantVectorRepository
+from app.domains.knowledge.services.lifecycle import DocumentLifecycleService
+from app.domains.knowledge.operation.repository import DocumentOperationRepository
 from app.domains.workspace.dependencies import CurrentWorkSpaceDep
 
 from app.infra.embedding.factory import get_embedding
@@ -48,10 +50,11 @@ def get_document_chunk_repository(session: SessionDep) -> DocumentChunkRepositor
 def get_vector_repository(client: QdrantDep) -> QdrantVectorRepository:
     return QdrantVectorRepository(client)
 
-def get_ingestion_job_repository(
-    session: SessionDep,
-) -> IngestionJobRepository:
+def get_ingestion_job_repository(session: SessionDep) -> IngestionJobRepository:
     return IngestionJobRepository(session)
+
+def get_document_operation_repository(session: SessionDep) -> DocumentOperationRepository:
+    return DocumentOperationRepository(session)
 
 DocumentRepositoryDep = Annotated[
     DocumentRepository,
@@ -81,6 +84,29 @@ IngestionJobRepositoryDep = Annotated[
     IngestionJobRepository,
     Depends(get_ingestion_job_repository),
 ]
+DocumentOperationRepositoryDep = Annotated[
+    DocumentOperationRepository,
+    Depends(get_document_operation_repository),
+]
+
+
+def get_document_lifecycle_service(
+    session: SessionDep,
+    redis: RedisDep,
+    s3: S3ClientDep,
+    vectors: QdrantVectorRepositoryDep,
+) -> DocumentLifecycleService:
+    return DocumentLifecycleService(
+        session=session,
+        s3=s3,
+        vectors=vectors,
+        redis=redis,
+    )
+
+DocumentLifecycleServiceDep = Annotated[
+    DocumentLifecycleService,
+    Depends(get_document_lifecycle_service),
+]
 
 
 def get_document_service(
@@ -90,6 +116,7 @@ def get_document_service(
     chunk_repository: DocumentChunkRepositoryDep,
     vector_repository: QdrantVectorRepositoryDep,
     s3: S3ClientDep,
+    lifecycle: DocumentLifecycleServiceDep,
 ) -> DocumentService:
     return DocumentService(
         session=session,
@@ -98,6 +125,7 @@ def get_document_service(
         chunks_repo=chunk_repository,
         vector_repo=vector_repository,
         s3=s3,
+        lifecycle=lifecycle,
     )
 
 DocumentServiceDep = Annotated[
@@ -134,6 +162,7 @@ def get_document_upload_service(
     documents_repo: DocumentRepositoryDep,
     versions_repo: DocumentVersionRepositoryDep,
     ingestion_repo: IngestionJobRepositoryDep,
+    lifecycle: DocumentLifecycleServiceDep,
 ) -> DocumentUploadService:
     return DocumentUploadService(
         session=session,
@@ -142,6 +171,7 @@ def get_document_upload_service(
         documents_repo=documents_repo,
         versions_repo=versions_repo,
         ingestion_repo=ingestion_repo,
+        lifecycle=lifecycle,
     )
 
 DocumentUploadServiceDep = Annotated[
@@ -153,11 +183,13 @@ DocumentUploadServiceDep = Annotated[
 def get_retrieval_service(
     embedding: EmbeddingDep,
     vector_repo: QdrantVectorRepositoryDep,
+    documents_repo: DocumentRepositoryDep,
     reranker: RerankerDep,
 ) -> RetrievalService:
     return RetrievalService(
         embedding=embedding,
         vector_repo=vector_repo,
+        documents_repo=documents_repo,
         reranker=reranker,
         rerank_candidate_limit=(
             settings.RERANK_CANDIDATE_LIMIT
