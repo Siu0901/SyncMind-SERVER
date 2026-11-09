@@ -8,6 +8,9 @@ from app.domains.knowledge.schema import (
 from app.domains.knowledge.vector_repository import (
     QdrantVectorRepository,
 )
+from app.domains.knowledge.document.repository import (
+    DocumentRepository,
+)
 from app.infra.embedding.port import EmbeddingPort
 from app.infra.reranking.port import (
     RerankCandidate,
@@ -25,6 +28,7 @@ class RetrievalService:
         self,
         embedding: EmbeddingPort,
         vector_repo: QdrantVectorRepository,
+        documents_repo: DocumentRepository,
         reranker: Optional[RerankerPort],
         rerank_candidate_limit: int,
     ):
@@ -32,6 +36,7 @@ class RetrievalService:
         self.vector_repo = vector_repo
         self.reranker = reranker
         self.rerank_candidate_limit = rerank_candidate_limit
+        self.documents_repo = documents_repo
 
 
     async def search(
@@ -61,6 +66,22 @@ class RetrievalService:
             dense_vector=dense_vector,
             limit=candidate_limit,
         )
+
+        searchable_ids = (
+            await self.documents_repo.get_searchable_version_ids(
+                workspace_id=workspace_id,
+                version_ids=[
+                    candidate.document_version_id
+                    for candidate in candidates
+                ],
+            )
+        )
+
+        candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.document_version_id in searchable_ids
+        ]
 
         if not candidates:
             return []

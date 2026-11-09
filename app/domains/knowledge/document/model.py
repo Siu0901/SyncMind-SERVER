@@ -77,6 +77,15 @@ class Document(SQLModel, table=True):
         )
     )
 
+    deleted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=True,
+            index=True,
+        ),
+    )
+
 
 class DocumentVersion(SQLModel, table=True):
     __tablename__ = "document_version"
@@ -169,7 +178,7 @@ class DocumentChunk(SQLModel, table=True):
     page_number: Optional[int] = Field(default=None)
     section: Optional[str] = Field(
         default=None,
-        max_length=500,
+        sa_column=Column(Text, nullable=True),
     )
     chunk_metadata: dict[str, Any] = Field(
         default_factory=dict,

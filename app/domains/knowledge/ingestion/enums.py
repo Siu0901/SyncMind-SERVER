@@ -4,6 +4,7 @@ import enum
 class IngestionJobStatus(enum.StrEnum):
     QUEUED = "queued"
     PROCESSING = "processing"
+    RETRY_WAIT = "retry_wait"
     COMPLETED = "completed"
     FAILED = "failed"
 

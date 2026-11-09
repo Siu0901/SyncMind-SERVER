@@ -5,11 +5,13 @@ from app.domains.knowledge.dependencies import (
     DocumentServiceDep,
     DocumentUploadServiceDep,
     RetrievalServiceDep,
+    DocumentOperationServiceDep,
 )
 from app.domains.knowledge.schema import (
     SearchRequest,
     DocumentChunkResponse,
     DocumentResponse,
+    DocumentOperationResponse,
     DocumentUpdateRequest,
     DocumentVersionResponse,
     RetrievalResult,
@@ -57,14 +59,17 @@ async def update_document(
     return await service.update_document(document, data)
 
 
-@document_router.delete("/delete/{document_id}")
+@document_router.delete(
+    "/delete/{document_id}",
+    status_code=202,
+)
 async def delete_document(
     document: CurrentDocumentDep,
     _: WorkspaceAdminDep,
     service: DocumentServiceDep,
 ):
     await service.delete_document(document)
-    return {"message": "Document deleted"}
+    return {"message": "문서 삭제 요청을 접수했습니다."}
 
 
 @document_router.get(
@@ -92,6 +97,7 @@ async def get_document_chunks(
 @document_router.post(
     "/upload",
     response_model=DocumentResponse,
+    status_code=202,
 )
 async def upload_document(
     workspace: CurrentWorkSpaceDep,
@@ -118,4 +124,19 @@ async def search_documents(
         workspace_id=workspace.id,
         query=request.query,
         limit=request.limit,
+    )
+
+
+@document_router.get(
+    "/operations/{document_id}",
+    response_model=DocumentOperationResponse,
+)
+async def get_document_operation(
+    document_id: int,
+    workspace: CurrentWorkSpaceDep,
+    service: DocumentOperationServiceDep,
+):
+    return await service.get_operation(
+        document_id=document_id,
+        workspace_id=workspace.id,
     )

@@ -27,17 +27,15 @@ from app.domains.knowledge.schema import (
     DocumentVersionCreateData,
 )
 from app.domains.knowledge.document.exceptions import (
-    DocumentNotFoundError,
-    DocumentNotReadyError,
     DocumentVersionNotFoundError,
-    DuplicateDocumentError,
 )
 from app.domains.knowledge.ingestion.repository import IngestionJobRepository
-from app.domains.knowledge.ingestion.model import IngestionJob
-from app.domains.knowledge.ingestion.enums import IngestionJobStatus
 from app.core.exception.exceptions import AppException
 from app.core.config import get_settings
 from app.core.s3 import S3Client
+from app.domains.knowledge.services.lifecycle import (
+    DocumentLifecycleService,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -55,6 +53,7 @@ class DocumentService:
         chunks_repo: DocumentChunkRepository,
         vector_repo: QdrantVectorRepository,
         s3: S3Client,
+        lifecycle: DocumentLifecycleService,
     ):
         self.session = session
         self.documents_repo = documents_repo
@@ -62,6 +61,7 @@ class DocumentService:
         self.chunks_repo = chunks_repo
         self.vector_repo = vector_repo
         self.s3 = s3
+        self.lifecycle = lifecycle
 
 
     async def create_document(
@@ -182,40 +182,7 @@ class DocumentService:
 
 
     async def delete_document(self, document: Document):
-        document_id = document.id
-
-        versions = await self.versions_repo.get_all(document_id)
-
-        s3_keys = [
-            version.s3_key
-            for version in versions
-            if version.s3_key is not None
-        ]
-
-        try:
-            await self.s3.delete_files(s3_keys)
-
-            await self.vector_repo.delete_by_document(document_id)
-
-            await self.documents_repo.delete(document)
-
-            await self.session.commit()
-
-        except Exception:
-            await self.session.rollback()
-
-            logger.exception(
-                "Document deletion failed | document_id=%s",
-                document_id,
-            )
-
-            raise
-
-        logger.info(
-            "Document deleted | document_id=%s s3_files=%s",
-            document_id,
-            len(s3_keys),
-        )
+        await self.lifecycle.delete_document(document.id)
 
 
     async def get_versions(self, document: Document) -> list[DocumentVersion]:
@@ -243,7 +210,8 @@ class DocumentUploadService:
         s3: S3Client,
         documents_repo: DocumentRepository,
         versions_repo: DocumentVersionRepository,
-        ingestion_repo: IngestionJobRepository
+        ingestion_repo: IngestionJobRepository,
+        lifecycle: DocumentLifecycleService,
     ):
         self.session = session
         self.redis = redis
@@ -251,6 +219,7 @@ class DocumentUploadService:
         self.documents_repo = documents_repo
         self.versions_repo = versions_repo
         self.ingestion_repo = ingestion_repo
+        self.lifecycle = lifecycle
 
 
     @staticmethod
@@ -304,7 +273,6 @@ class DocumentUploadService:
             f"{safe_filename}"
         )
 
-
     async def upload(
         self,
         workspace_id: int,
@@ -312,85 +280,9 @@ class DocumentUploadService:
     ) -> Document:
         file_size, content_hash = await self._prepare_file(file)
 
-        exist = await self.versions_repo.exists_by_content_hash(
-            content_hash, workspace_id
+        return await self.lifecycle.upload_prepared(
+            workspace_id=workspace_id,
+            file=file,
+            file_size=file_size,
+            content_hash=content_hash,
         )
-
-        if exist:
-            raise DuplicateDocumentError()
-
-        filename = Path(file.filename).name
-
-        s3_key = self._create_s3_key(workspace_id, filename)
-
-        await self.s3.upload_file(
-            file=file.file,
-            key=s3_key,
-            content_type=file.content_type,
-        )
-
-        try:
-            document = Document(
-                workspace_id=workspace_id,
-                source_id=None,
-                external_id=None,
-                title=filename,
-                status=DocumentStatus.PENDING,
-                current_version=None,
-            )
-            await self.documents_repo.create(document)
-
-            version = DocumentVersion(
-                document_id=document.id,
-                version=1,
-                content_hash=content_hash,
-                s3_key=s3_key,
-                mime_type=file.content_type,
-                file_size=file_size,
-                source_updated_at=None,
-                is_active=False,
-            )
-            await self.versions_repo.create(version)
-
-            job = IngestionJob(
-                document_version_id=version.id,
-                status=IngestionJobStatus.QUEUED,
-                retry_count=0,
-            )
-            await self.ingestion_repo.create(job)
-
-            await self.session.commit()
-
-        except Exception:
-            await self.session.rollback()
-
-            await self.s3.delete_file(s3_key)
-
-            raise
-
-        try:
-            await self.redis.enqueue_job(
-                "process_document",
-                job.id,
-                _job_id=f"ingestion:{job.id}",
-                _queue_name=settings.document_queue_name,
-            )
-
-        except Exception:
-            logger.exception(
-                "Failed to enqueue ingestion | job_id=%s",
-                job.id,
-            )
-
-            # 지금은 일단 그대로 raise 하자
-            # 나중에 outbox/retry 구조로 개선 ㄱㄱ.
-            raise
-
-        logger.info(
-            "Document uploaded | document_id=%s version_id=%s job_id=%s",
-            document.id,
-            version.id,
-            job.id,
-        )
-
-        return document
