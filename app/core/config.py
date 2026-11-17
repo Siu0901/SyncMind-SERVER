@@ -70,12 +70,19 @@ class Settings(BaseSettings):
 
     # llm/embed-api + parameter
     OPENAI_API_KEY: SecretStr
-    OPENAI_EMBED_MODEL: str
-    OPENAI_LLM_MODEL: str
-    OPENAI_EMBED_MODEL: str
-    OPENAI_EMBED_DIM: int
-    OPENAI_EMBED_BATCH_SIZE: int
-    EMBEDDING_PROVIDER: str
+    OPENAI_EMBED_MODEL: str = "text-embedding-3-large"
+    OPENAI_LLM_MODEL: str = "gpt-5.6-luna"
+    OPENAI_EMBED_DIM: int = 3072
+    OPENAI_EMBED_BATCH_SIZE: int = 100
+    EMBEDDING_PROVIDER: str = "openai"
+
+    # Text generation
+    LLM_PROVIDER: str = "anthropic"
+    ANTHROPIC_API_KEY: SecretStr | None = None
+    ANTHROPIC_LLM_MODEL: str = "claude-haiku-5-5"
+    LLM_TIMEOUT_SECONDS: float = 60.0
+    LLM_MAX_RETRIES: int = 2
+    LLM_MAX_OUTPUT_TOKENS: int = 2048
 
     # 업로드 문서 관련 데이터들
     #---------------------
@@ -96,7 +103,7 @@ class Settings(BaseSettings):
     #----------------------
 
     # 청킹
-    ENCODING_NAME: str
+    ENCODING_NAME: str = "cl100k_base"
     MAX_TOKENS: int = 768 # 512가 기본인데 한국어는 영어보다 토큰 딸려서 768 정도로 높여야 될듯.
     MIN_TOKENS: int = 96
     OVERLAP_RATIO: float = 0.12 # 오버랩 10~15%가 좋다해서 적절하게 12% 정도로 함
