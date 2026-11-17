@@ -12,36 +12,69 @@ _llm: LLMPort | None = None
 
 def create_llm() -> LLMPort:
     settings = get_settings()
-    if settings.LLM_TIMEOUT_SECONDS <= 0 or settings.LLM_MAX_RETRIES < 0 or settings.LLM_MAX_OUTPUT_TOKENS <= 0:
-        raise ValueError("Invalid LLM timeout, retry count, or output token limit")
+
+    if (
+        settings.LLM_TIMEOUT_SECONDS <= 0
+        or settings.LLM_MAX_RETRIES < 0
+        or settings.LLM_MAX_OUTPUT_TOKENS <= 0
+    ):
+        raise ValueError(
+            "Invalid LLM timeout, retry count, "
+            "or output token limit"
+        )
 
     if settings.LLM_PROVIDER == "anthropic":
         key = settings.ANTHROPIC_API_KEY
         model = settings.ANTHROPIC_LLM_MODEL
-        if key is None or not key.get_secret_value().strip() or not model.strip():
-            raise ValueError("ANTHROPIC_API_KEY and ANTHROPIC_LLM_MODEL are required")
+
+        if (
+            key is None
+            or not key.get_secret_value().strip()
+            or not model.strip()
+        ):
+            raise ValueError(
+                "ANTHROPIC_API_KEY and "
+                "ANTHROPIC_LLM_MODEL are required"
+            )
+
         return AnthropicLLMAdapter(
-            AsyncAnthropic(
+            client=AsyncAnthropic(
                 api_key=key.get_secret_value(),
                 timeout=settings.LLM_TIMEOUT_SECONDS,
-                max_retries=settings.LLM_MAX_RETRIES
+                max_retries=settings.LLM_MAX_RETRIES,
             ),
-            model, settings.LLM_MAX_OUTPUT_TOKENS,
+            model=model,
+            max_output_tokens=(
+                settings.LLM_MAX_OUTPUT_TOKENS
+            ),
         )
+
     if settings.LLM_PROVIDER == "openai":
         key = settings.OPENAI_API_KEY.get_secret_value()
         model = settings.OPENAI_LLM_MODEL
+
         if not key.strip() or not model.strip():
-            raise ValueError("OPENAI_API_KEY and OPENAI_LLM_MODEL are required")
+            raise ValueError(
+                "OPENAI_API_KEY and "
+                "OPENAI_LLM_MODEL are required"
+            )
+
         return OpenAILLMAdapter(
-            AsyncOpenAI(
+            client=AsyncOpenAI(
                 api_key=key,
                 timeout=settings.LLM_TIMEOUT_SECONDS,
-                max_retries=settings.LLM_MAX_RETRIES
+                max_retries=settings.LLM_MAX_RETRIES,
             ),
-            model, settings.LLM_MAX_OUTPUT_TOKENS,
+            model=model,
+            max_output_tokens=(
+                settings.LLM_MAX_OUTPUT_TOKENS
+            ),
         )
-    raise ValueError(f"Unsupported LLM provider: {settings.LLM_PROVIDER}")
+
+    raise ValueError(
+        "Unsupported LLM provider: "
+        f"{settings.LLM_PROVIDER}"
+    )
 
 
 def init_llm() -> LLMPort:
