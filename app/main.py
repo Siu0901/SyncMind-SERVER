@@ -28,6 +28,7 @@ from app.infra.embedding.factory import (
 from app.infra.reranking.factory import (
     reranker_lifespan,
 )
+from app.infra.llm.factory import init_llm, close_llm
 from app.api import router
 
 
@@ -52,6 +53,8 @@ async def lifespan(app: FastAPI):
     logger.info("Embedding initialized")
 
     try:
+        init_llm()
+        logger.info("LLM initialized")
         async with reranker_lifespan() as reranker:
             if reranker is None:
                 logger.info("Reranker disabled")
@@ -66,6 +69,7 @@ async def lifespan(app: FastAPI):
         await close_redis()
         await close_qdrant()
         await close_embedding()
+        await close_llm()
 
 
 app = FastAPI(title="SyncMind", lifespan=lifespan)
