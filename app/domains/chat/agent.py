@@ -1,5 +1,3 @@
-import json
-
 from asyncio import timeout
 
 from app.domains.chat.exceptions import (
@@ -13,6 +11,7 @@ from app.domains.chat.schema import ChatAgentResult
 from app.domains.chat.tools.knowledge import (
     SearchKnowledgeTool,
 )
+from app.domains.chat.tools.registry import ToolRegistry
 from app.domains.knowledge.services.retrieval import (
     RetrievalService,
 )
@@ -23,8 +22,6 @@ from app.infra.llm.schema import (
     LLMRequest,
     LLMResponse,
     LLMStopReason,
-    LLMToolCall,
-    LLMToolResult,
     LLMUsage,
 )
 
@@ -71,6 +68,16 @@ class ChatAgent:
         except TimeoutError as exc:
             raise ChatAgentTimeoutError() from exc
 
+    def _create_registry(self, workspace_id: int) -> ToolRegistry:
+        return ToolRegistry(
+            tools=[
+                SearchKnowledgeTool(
+                    retrieval=self.retrieval,
+                    workspace_id=workspace_id,
+                ),
+            ],
+            max_calls=self.max_tool_calls,
+        )
 
     async def _run(
         self,
@@ -79,8 +86,7 @@ class ChatAgent:
         question: str,
         history: list[LLMMessage] | None,
     ) -> ChatAgentResult:
-        search_tool = SearchKnowledgeTool(
-            retrieval=self.retrieval,
+        registry = self._create_registry(
             workspace_id=workspace_id,
         )
 
@@ -94,20 +100,19 @@ class ChatAgent:
         )
 
         responses: list[LLMResponse] = []
-        seen_calls: set[str] = set()
-        tool_calls = 0
 
         for step in range(self.max_model_calls):
             force_answer = (
                 step == self.max_model_calls - 1
-                or tool_calls >= self.max_tool_calls
+                or registry.exhausted
+                or not registry.definitions
             )
 
             response = await self.llm.generate(
                 LLMRequest(
                     system=CHAT_AGENT_SYSTEM_PROMPT,
                     messages=messages,
-                    tools=[search_tool.definition],
+                    tools=registry.definitions,
                     tool_choice=(
                         "none"
                         if force_answer
@@ -136,11 +141,9 @@ class ChatAgent:
                 return ChatAgentResult(
                     response=response,
                     usage=self._total_usage(responses),
-                    sources=list(
-                        search_tool.sources.values()
-                    ),
+                    sources=registry.sources,
                     model_calls=len(responses),
-                    tool_calls=tool_calls,
+                    tool_calls=registry.call_count,
                 )
 
             if response.stop_reason == LLMStopReason.TRUNCATED:
@@ -168,88 +171,11 @@ class ChatAgent:
             messages.append(response.message)
 
             for call in response.message.tool_calls:
-                if tool_calls >= self.max_tool_calls:
-                    result = self._tool_error(
-                        call=call,
-                        code="tool_limit_reached",
-                        message=(
-                            "The tool execution limit "
-                            "has been reached. "
-                            "Answer using the available evidence."
-                        ),
-                    )
-
-                else:
-                    tool_calls += 1
-
-                    result = await self._execute_tool(
-                        call=call,
-                        search_tool=search_tool,
-                        seen_calls=seen_calls,
-                    )
-
+                result = await registry.execute(call)
                 messages.append(result)
 
         raise ChatAgentError(
             "The agent did not produce a final answer"
-        )
-
-    async def _execute_tool(
-        self,
-        *,
-        call: LLMToolCall,
-        search_tool: SearchKnowledgeTool,
-        seen_calls: set[str],
-    ) -> LLMToolResult:
-        if call.name != search_tool.definition.name:
-            return self._tool_error(
-                call=call,
-                code="unknown_tool",
-                message=f"Unknown tool: {call.name}",
-            )
-
-        signature = json.dumps(
-            {
-                "name": call.name,
-                "arguments": call.arguments,
-            },
-            sort_keys=True,
-            ensure_ascii=False,
-        )
-
-        if signature in seen_calls:
-            return self._tool_error(
-                call=call,
-                code="duplicate_tool_call",
-                message=(
-                    "This tool was already called "
-                    "with the same arguments. "
-                    "Use the previous result "
-                    "or change the search query."
-                ),
-            )
-
-        seen_calls.add(signature)
-
-        return await search_tool.execute(call)
-
-    @staticmethod
-    def _tool_error(
-        *,
-        call: LLMToolCall,
-        code: str,
-        message: str,
-    ) -> LLMToolResult:
-        return LLMToolResult(
-            tool_call_id=call.id,
-            content=json.dumps(
-                {
-                    "code": code,
-                    "message": message,
-                },
-                ensure_ascii=False,
-            ),
-            is_error=True,
         )
 
     @staticmethod
