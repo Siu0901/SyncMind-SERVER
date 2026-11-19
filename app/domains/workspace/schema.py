@@ -5,6 +5,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.domains.workspace.enums import WorkspaceRole
 
 
+class WorkspaceAccessContext(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    workspace_id: int
+    user_id: int
+    role: WorkspaceRole
+
+
 class WorkspaceCreateRequest(BaseModel):
     name: str = Field(
         min_length=1,
