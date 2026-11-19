@@ -2,6 +2,8 @@ from types import SimpleNamespace as Obj
 from unittest.mock import AsyncMock
 
 import pytest
+from anthropic.types import Message
+from openai.types.responses import Response, ResponseOutputMessage, ResponseUsage
 from pydantic import SecretStr
 
 from app.infra.llm import factory
@@ -9,7 +11,7 @@ from app.infra.llm.adapter.claude_adapter import AnthropicLLMAdapter
 from app.infra.llm.adapter.openai_adapter import OpenAILLMAdapter
 from app.infra.llm.exceptions import LLMRequestError, LLMUnavailableError
 from app.infra.llm.schema import (
-    LLMCompleted, LLMMessage, LLMRequest, LLMTextDelta,
+    LLMCompleted, LLMMessage, LLMRequest, LLMStopReason, LLMTextDelta,
 )
 
 pytestmark = pytest.mark.anyio
@@ -36,23 +38,37 @@ class FakeStream:
 
 
 def request():
-    return LLMRequest([LLMMessage("user", "hello")], system="help", max_output_tokens=100)
+    return LLMRequest(messages=[LLMMessage(role="user", content="hello")], system="help", max_output_tokens=100)
 
 
 def claude_response():
-    return Obj(content=[Obj(type="text", text="hello")], model="claude-test", usage=Obj(input_tokens=3, output_tokens=2), stop_reason="end_turn")
+    return Message.model_validate({
+        "id": "msg_test", "type": "message", "role": "assistant",
+        "content": [{"type": "text", "text": "hello"}],
+        "model": "claude-test", "stop_reason": "end_turn",
+        "usage": {"input_tokens": 3, "output_tokens": 2},
+    })
 
 
 def openai_response(status="completed", refusal=None):
-    content = [Obj(type="refusal", refusal=refusal)] if refusal else [Obj(type="output_text", text="hello")]
-    return Obj(output_text="" if refusal else "hello", output=[Obj(type="message", content=content)], model="gpt-test", usage=Obj(input_tokens=3, output_tokens=2), status=status, incomplete_details=Obj(reason="max_output_tokens") if status == "incomplete" else None)
+    content = [{"type": "refusal", "refusal": refusal}] if refusal else [{"type": "output_text", "text": "hello", "annotations": []}]
+    return Response.model_construct(
+        id="resp_test", object="response", created_at=1,
+        model="gpt-test", status=status,
+        output=[ResponseOutputMessage.model_validate({
+            "id": "msg_test", "type": "message", "role": "assistant",
+            "status": "completed", "content": content,
+        })],
+        usage=ResponseUsage.model_construct(input_tokens=3, output_tokens=2, total_tokens=5),
+        incomplete_details=Obj(reason="max_output_tokens") if status == "incomplete" else None,
+    )
 
 
 async def test_claude_generation_maps_request_and_response():
     create = AsyncMock(return_value=claude_response())
     adapter = AnthropicLLMAdapter(Obj(messages=Obj(create=create)), "claude-test", 200)
     result = await adapter.generate(request())
-    assert (result.text, result.model, result.usage.input_tokens, result.stop_reason) == ("hello", "claude-test", 3, "end_turn")
+    assert (result.message.text, result.model, result.usage.input_tokens, result.stop_reason) == ("hello", "claude-test", 3, LLMStopReason.DONE)
     assert create.await_args.kwargs == {"model": "claude-test", "messages": [{"role": "user", "content": "hello"}], "system": "help", "max_tokens": 100}
 
 
@@ -60,9 +76,9 @@ async def test_claude_stream_completes_and_closes():
     stream = FakeStream([Obj(type="content_block_delta", delta=Obj(type="text_delta", text="hello")), Obj(type="message_stop")], claude_response())
     adapter = AnthropicLLMAdapter(Obj(messages=Obj(stream=lambda **kwargs: stream)), "claude-test", 200)
     events = [event async for event in adapter.stream(request())]
-    assert events[0] == LLMTextDelta("hello")
+    assert events[0] == LLMTextDelta(text="hello")
     assert isinstance(events[-1], LLMCompleted)
-    assert events[-1].response.text == "hello"
+    assert events[-1].response.message.text == "hello"
     assert stream.closed
 
 
@@ -78,8 +94,8 @@ async def test_openai_generation_maps_request_and_refusal():
     create = AsyncMock(return_value=openai_response(refusal="cannot help"))
     adapter = OpenAILLMAdapter(Obj(responses=Obj(create=create)), "gpt-test", 200)
     result = await adapter.generate(request())
-    assert (result.text, result.stop_reason) == ("cannot help", "refusal")
-    assert create.await_args.kwargs == {"model": "gpt-test", "input": [{"role": "user", "content": "hello"}], "instructions": "help", "max_output_tokens": 100, "store": False}
+    assert (result.message.text, result.stop_reason) == ("cannot help", LLMStopReason.REFUSED)
+    assert create.await_args.kwargs == {"model": "gpt-test", "input": [{"role": "user", "content": "hello"}], "instructions": "help", "max_output_tokens": 100, "store": False, "include": ["reasoning.encrypted_content"]}
 
 
 async def test_openai_incomplete_stream_is_reported():
@@ -87,8 +103,8 @@ async def test_openai_incomplete_stream_is_reported():
     create = AsyncMock(return_value=stream)
     adapter = OpenAILLMAdapter(Obj(responses=Obj(create=create)), "gpt-test", 200)
     events = [event async for event in adapter.stream(request())]
-    assert events[0] == LLMTextDelta("hello")
-    assert events[-1].response.stop_reason == "max_output_tokens"
+    assert events[0] == LLMTextDelta(text="hello")
+    assert events[-1].response.stop_reason == LLMStopReason.TRUNCATED
     assert create.await_args.kwargs["stream"] is True
     assert stream.closed
 
@@ -140,8 +156,8 @@ async def test_anthropic_sdk_stream_events():
     adapter = AnthropicLLMAdapter(client, "claude-test", 100)
     try:
         result = [event async for event in adapter.stream(request())]
-        assert result[0] == LLMTextDelta("hello")
-        assert result[-1].response.text == "hello"
+        assert result[0] == LLMTextDelta(text="hello")
+        assert result[-1].response.message.text == "hello"
         assert result[-1].response.usage.output_tokens == 2
     finally:
         await adapter.close()
@@ -159,8 +175,8 @@ async def test_openai_sdk_stream_events():
     adapter = OpenAILLMAdapter(client, "gpt-test", 100)
     try:
         result = [event async for event in adapter.stream(request())]
-        assert result[0] == LLMTextDelta("hello")
-        assert result[-1].response.text == "hello"
+        assert result[0] == LLMTextDelta(text="hello")
+        assert result[-1].response.message.text == "hello"
         assert result[-1].response.usage.output_tokens == 2
     finally:
         await adapter.close()
