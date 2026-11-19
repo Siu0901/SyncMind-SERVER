@@ -18,6 +18,7 @@ from app.domains.knowledge.schema import (
 )
 from app.domains.workspace.dependencies import (
     CurrentWorkSpaceDep,
+    CurrentWorkspaceAccessDep,
     WorkspaceAdminDep,
 )
 
@@ -116,12 +117,12 @@ async def upload_document(
     response_model=list[RetrievalResult],
 )
 async def search_documents(
-    workspace: CurrentWorkSpaceDep,
+    access: CurrentWorkspaceAccessDep,
     request: SearchRequest,
     service: RetrievalServiceDep,
 ):
     return await service.search(
-        workspace_id=workspace.id,
+        workspace_id=access.workspace_id,
         query=request.query,
         limit=request.limit,
     )
