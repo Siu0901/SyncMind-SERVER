@@ -26,15 +26,14 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 # ========= auth =========
-async def get_current_user(
+async def get_current_user_id(
     credentials: Annotated[
         Optional[HTTPAuthorizationCredentials],
         Depends(bearer_scheme),
     ],
     auth_manager: AuthManagerDep,
-    user_repository: UserRepositoryDep,
     redis: RedisDep,
-) -> User:
+) -> int:
     if credentials is None:
         raise TokenInvalidError()
 
@@ -77,7 +76,27 @@ async def get_current_user(
     if current_access_jti != payload.jti:
         raise SessionExpiredError()
 
-    user = await user_repository.get_by_id(payload.user_id)
+    return payload.user_id
+
+CurrentUserIdDep = Annotated[int, Depends(get_current_user_id)]
+
+
+async def get_current_user(
+    credentials: Annotated[
+        Optional[HTTPAuthorizationCredentials],
+        Depends(bearer_scheme),
+    ],
+    auth_manager: AuthManagerDep,
+    user_repository: UserRepositoryDep,
+    redis: RedisDep,
+) -> User:
+    user_id = await get_current_user_id(
+        credentials=credentials,
+        auth_manager=auth_manager,
+        redis=redis,
+    )
+
+    user = await user_repository.get_by_id(user_id)
 
     if user is None:
         raise TokenInvalidError()
