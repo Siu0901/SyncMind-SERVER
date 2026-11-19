@@ -2,6 +2,9 @@ import logging
 
 from typing import Optional
 
+from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from app.domains.knowledge.schema import (
     RetrievalResult,
 )
@@ -28,7 +31,7 @@ class RetrievalService:
         self,
         embedding: EmbeddingPort,
         vector_repo: QdrantVectorRepository,
-        documents_repo: DocumentRepository,
+        session_factory: async_sessionmaker[AsyncSession],
         reranker: Optional[RerankerPort],
         rerank_candidate_limit: int,
     ):
@@ -36,7 +39,7 @@ class RetrievalService:
         self.vector_repo = vector_repo
         self.reranker = reranker
         self.rerank_candidate_limit = rerank_candidate_limit
-        self.documents_repo = documents_repo
+        self.session_factory = session_factory
 
 
     async def search(
@@ -68,7 +71,7 @@ class RetrievalService:
         )
 
         searchable_ids = (
-            await self.documents_repo.get_searchable_version_ids(
+            await self._get_searchable_version_ids(
                 workspace_id=workspace_id,
                 version_ids=[
                     candidate.document_version_id
@@ -94,6 +97,22 @@ class RetrievalService:
             candidates=candidates,
             limit=limit,
         )
+
+
+    async def _get_searchable_version_ids(
+        self,
+        workspace_id: int,
+        version_ids: list[int],
+    ) -> set[int]:
+        if not version_ids:
+            return set()
+
+        async with self.session_factory() as session:
+            repository = DocumentRepository(session)
+            return await repository.get_searchable_version_ids(
+                workspace_id=workspace_id,
+                version_ids=version_ids,
+            )
 
 
     async def _rerank(
