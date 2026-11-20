@@ -1,7 +1,7 @@
 import json
 
 from app.domains.chat.tools.base import AgentTool
-from app.domains.knowledge.schema import RetrievalResult
+from app.domains.knowledge.schema import KnowledgeSource
 from app.infra.llm.schema import (
     LLMTool,
     LLMToolCall,
@@ -52,8 +52,8 @@ class ToolRegistry:
         return self._call_count >= self.max_calls
 
     @property
-    def sources(self) -> list[RetrievalResult]:
-        collected: dict[int, RetrievalResult] = {}
+    def sources(self) -> list[KnowledgeSource]:
+        collected: dict[int, KnowledgeSource] = {}
 
         for tool in self._tools.values():
             collected.update(tool.sources)

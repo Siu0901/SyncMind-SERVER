@@ -159,6 +159,7 @@ class QdrantVectorRepository:
                     ],
                     title=payload["title"],
                     content=payload["content"],
+                    chunk_index=payload.get("chunk_index"),
                     page_number=payload.get(
                         "page_number"
                     ),

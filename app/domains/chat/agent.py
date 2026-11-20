@@ -9,6 +9,8 @@ from app.domains.chat.prompt import (
 )
 from app.domains.chat.schema import ChatAgentResult
 from app.domains.chat.tools.knowledge import (
+    ReadAdjacentChunksTool,
+    ReadDocumentTool,
     SearchKnowledgeTool,
 )
 from app.domains.chat.tools.registry import ToolRegistry
@@ -72,6 +74,14 @@ class ChatAgent:
         return ToolRegistry(
             tools=[
                 SearchKnowledgeTool(
+                    retrieval=self.retrieval,
+                    workspace_id=workspace_id,
+                ),
+                ReadDocumentTool(
+                    retrieval=self.retrieval,
+                    workspace_id=workspace_id,
+                ),
+                ReadAdjacentChunksTool(
                     retrieval=self.retrieval,
                     workspace_id=workspace_id,
                 ),
