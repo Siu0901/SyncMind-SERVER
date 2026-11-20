@@ -68,6 +68,7 @@ class ChatMessage(SQLModel, table=True):
     conversation_id: int = Field(
         foreign_key="conversation.id",
         index=True,
+        ondelete="CASCADE",
     )
 
     role: MessageRole
@@ -93,6 +94,7 @@ class MessageCitation(SQLModel, table=True):
     message_id: int = Field(
         foreign_key="chat_message.id",
         primary_key=True,
+        ondelete="CASCADE",
     )
 
     chunk_id: int = Field(
