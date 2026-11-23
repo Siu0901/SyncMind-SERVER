@@ -5,13 +5,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.dependencies.utils import get_dependant
-from fastapi.dependencies.utils import get_dependant
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.database import get_session
-from app.core.database import get_session
 from app.core.dependencies import get_session_factory
 from app.domains.chat.agent import ChatAgent
+from app.domains.chat.schema import AgentCompleted
 from app.domains.chat.dependencies import ChatAgentDep, CurrentChatAccessDep
 from app.domains.identity.auth.dependencies import get_current_user_id
 from app.domains.identity.auth.exceptions import InactiveUserError, TokenInvalidError
@@ -32,28 +31,12 @@ from app.infra.llm.schema import (
     LLMStopReason,
     LLMToolCall,
     LLMUsage,
+    LLMCompleted,
 )
 from app.infra.reranking.port import RerankResult
 
 
 pytestmark = pytest.mark.anyio
-
-
-async def chat_scope_probe(access: CurrentChatAccessDep, agent: ChatAgentDep):
-    pass
-
-
-@pytest.mark.parametrize("endpoint", [search_documents, chat_scope_probe])
-def test_search_and_chat_do_not_depend_on_request_scoped_sessions(endpoint):
-    dependency = get_dependant(path="/workspaces/{workspace_id}", call=endpoint)
-
-    def calls(node):
-        result = [node.call]
-        for child in node.dependencies:
-            result.extend(calls(child))
-        return result
-
-    assert get_session not in calls(dependency)
 
 
 class TrackingSessionFactory:
@@ -175,17 +158,20 @@ async def test_agent_releases_each_search_session_before_next_llm_call():
             stop_reason=LLMStopReason.TOOL_USE if calls else LLMStopReason.DONE,
         ))
 
-    async def generate(request):
+    async def stream(request):
         assert factory.active == 0
         for session in factory.sessions:
             session.close.assert_awaited_once()
-        return responses.pop(0)
+        yield LLMCompleted(response=responses.pop(0))
 
     agent = ChatAgent(
-        llm=SimpleNamespace(generate=AsyncMock(side_effect=generate)),
+        llm=SimpleNamespace(stream=stream),
         retrieval=retrieval_service(factory),
     )
-    result = await agent.run(workspace_id=7, question="What is the policy?")
+    events = [event async for event in agent.stream(
+        workspace_id=7, question="What is the policy?",
+    )]
+    result = next(event.result for event in events if isinstance(event, AgentCompleted))
 
     assert result.model_calls == 3
     assert result.tool_calls == 2

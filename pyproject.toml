@@ -30,6 +30,7 @@ dependencies = [
     "qdrant-client>=1.19.0",
     "sqlalchemy>=2.0.52",
     "sqlmodel>=0.0.39",
+    "sse-starlette>=3.7.0",
     "tiktoken>=0.14.0",
     "uvicorn>=0.52.4",
 ]

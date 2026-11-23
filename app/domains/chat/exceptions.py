@@ -52,3 +52,28 @@ class ChatCitationError(AppException):
             "The answer contains invalid or unavailable citations",
             502,
         )
+
+
+class ConversationBusyError(AppException):
+    def __init__(self):
+        super().__init__(
+            "An answer is already being generated "
+            "for this conversation",
+            409,
+        )
+
+
+class ChatGenerationLeaseLostError(AppException):
+    def __init__(self):
+        super().__init__(
+            "The conversation generation lease was lost",
+            409,
+        )
+
+
+class ChatStreamTimeoutError(AppException):
+    def __init__(self):
+        super().__init__(
+            "Chat stream execution timed out",
+            504,
+        )
