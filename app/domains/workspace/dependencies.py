@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.core.dependencies import SessionDep
+from app.core.dependencies import SessionDep, SessionFactoryDep
 from app.domains.workspace.exceptions import (
     WorkspaceMemberNotFoundError,
     WorkspaceNotFoundError,
@@ -11,7 +11,10 @@ from app.domains.workspace.exceptions import (
 )
 from app.domains.identity.auth.dependencies import (
     CurrentUserDep,
+    CurrentUserIdDep,
 )
+from app.domains.identity.auth.exceptions import InactiveUserError, TokenInvalidError
+from app.domains.identity.user.repository import UserRepository
 from app.domains.identity.user.dependencies import (
     UserQueryServiceDep,
 )
@@ -29,6 +32,42 @@ from app.domains.workspace.repository import (
 from app.domains.workspace.service import (
     WorkspaceService,
 )
+from app.domains.workspace.schema import WorkspaceAccessContext
+
+
+async def get_current_workspace_access(
+    workspace_id: int,
+    user_id: CurrentUserIdDep,
+    session_factory: SessionFactoryDep,
+) -> WorkspaceAccessContext:
+    async with session_factory() as session:
+        user = await UserRepository(session).get_by_id(user_id)
+        if user is None:
+            raise TokenInvalidError()
+        if not user.is_active:
+            raise InactiveUserError()
+
+        workspace = await WorkspaceRepository(session).get_by_id(workspace_id)
+        if workspace is None:
+            raise WorkspaceNotFoundError()
+
+        member = await WorkspaceMemberRepository(session).get_member(
+            workspace_id, user_id,
+        )
+        if member is None:
+            raise WorkspaceMemberNotFoundError()
+
+        return WorkspaceAccessContext(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            role=member.role,
+        )
+
+
+CurrentWorkspaceAccessDep = Annotated[
+    WorkspaceAccessContext,
+    Depends(get_current_workspace_access),
+]
 
 
 def get_workspace_repository(session: SessionDep) -> WorkspaceRepository:

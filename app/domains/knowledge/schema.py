@@ -20,7 +20,7 @@ class SearchRequest(BaseModel):
     )
 
 
-class RetrievalResult(BaseModel):
+class KnowledgeSource(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     chunk_id: int
@@ -30,11 +30,14 @@ class RetrievalResult(BaseModel):
     title: str
     content: str
 
-    page_number: Optional[int] = None
-    section: Optional[str] = None
+    chunk_index: int | None = None
+    page_number: int | None = None
+    section: str | None = None
 
+
+class RetrievalResult(KnowledgeSource):
     retrieval_score: float
-    rerank_score: Optional[float] = None
+    rerank_score: float | None = None
 
     @computed_field
     @property
@@ -43,6 +46,13 @@ class RetrievalResult(BaseModel):
             return self.rerank_score
 
         return self.retrieval_score
+
+
+class KnowledgeReadResult(BaseModel):
+    chunks: list[KnowledgeSource]
+
+    has_more: bool = False
+    next_chunk_index: int | None = None
 
 
 class DocumentUpdateRequest(BaseModel):

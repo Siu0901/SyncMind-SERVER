@@ -14,6 +14,7 @@ from app.domains.knowledge.document.model import (
 from app.domains.knowledge.document.exceptions import (
     DocumentVersionNotFoundError,
 )
+from app.domains.knowledge.schema import KnowledgeSource
 from app.domains.knowledge.ingestion.schema import ChunkData
 
 
@@ -348,3 +349,99 @@ class DocumentChunkRepository:
         await self.create_many(chunks)
 
         return chunks
+
+
+    @staticmethod
+    def _readable_chunk_statement(workspace_id: int):
+        return (
+            select(
+                DocumentChunk.id.label("chunk_id"),
+                Document.id.label("document_id"),
+                DocumentVersion.id.label(
+                    "document_version_id"
+                ),
+                Document.title,
+                DocumentChunk.content,
+                DocumentChunk.chunk_index,
+                DocumentChunk.page_number,
+                DocumentChunk.section,
+            )
+            .select_from(DocumentChunk)
+            .join(
+                DocumentVersion,
+                DocumentVersion.id
+                == DocumentChunk.document_version_id,
+            )
+            .join(
+                Document,
+                Document.id
+                == DocumentVersion.document_id,
+            )
+            .where(
+                Document.workspace_id == workspace_id,
+                Document.deleted_at.is_(None),
+                Document.status == DocumentStatus.READY,
+                DocumentVersion.is_active.is_(True),
+            )
+        )
+
+
+    async def get_readable_chunk(
+        self,
+        workspace_id: int,
+        chunk_id: int,
+    ) -> KnowledgeSource | None:
+        statement = (
+            self._readable_chunk_statement(workspace_id)
+            .where(DocumentChunk.id == chunk_id)
+        )
+
+        row = (await self.session.exec(statement)).first()
+
+        if row is None:
+            return None
+
+        return KnowledgeSource.model_validate(
+            dict(row._mapping)
+        )
+
+
+    async def get_readable_range(
+        self,
+        *,
+        workspace_id: int,
+        document_version_id: int,
+        start_chunk_index: int,
+        limit: int,
+        end_chunk_index: int | None = None,
+    ) -> list[KnowledgeSource]:
+        statement = (
+            self._readable_chunk_statement(workspace_id)
+            .where(
+                DocumentChunk.document_version_id
+                == document_version_id,
+                DocumentChunk.chunk_index
+                >= start_chunk_index,
+            )
+        )
+
+        if end_chunk_index is not None:
+            statement = statement.where(
+                DocumentChunk.chunk_index
+                <= end_chunk_index
+            )
+
+        statement = (
+            statement
+            .order_by(DocumentChunk.chunk_index)
+            .limit(limit)
+        )
+
+        rows = (await self.session.exec(statement)).all()
+
+        return [
+            KnowledgeSource.model_validate(
+                dict(row._mapping)
+            )
+            for row in rows
+        ]

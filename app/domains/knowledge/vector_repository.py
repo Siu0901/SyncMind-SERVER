@@ -115,10 +115,7 @@ class QdrantVectorRepository:
             ]
         )
 
-        prefetch_limit = max(
-            20,
-            limit,
-        )
+        prefetch_limit = max(20, limit)
 
         response = await self.client.query_points(
             collection_name=settings.QDRANT_COLLECTION,
@@ -162,6 +159,7 @@ class QdrantVectorRepository:
                     ],
                     title=payload["title"],
                     content=payload["content"],
+                    chunk_index=payload.get("chunk_index"),
                     page_number=payload.get(
                         "page_number"
                     ),

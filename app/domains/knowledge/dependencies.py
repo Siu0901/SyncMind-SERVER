@@ -6,6 +6,7 @@ from app.core.config import get_settings
 
 from app.core.dependencies import (
     SessionDep,
+    SessionFactoryDep,
     RedisDep,
     S3ClientDep,
     QdrantDep
@@ -196,13 +197,13 @@ DocumentUploadServiceDep = Annotated[
 def get_retrieval_service(
     embedding: EmbeddingDep,
     vector_repo: QdrantVectorRepositoryDep,
-    documents_repo: DocumentRepositoryDep,
+    session_factory: SessionFactoryDep,
     reranker: RerankerDep,
 ) -> RetrievalService:
     return RetrievalService(
         embedding=embedding,
         vector_repo=vector_repo,
-        documents_repo=documents_repo,
+        session_factory=session_factory,
         reranker=reranker,
         rerank_candidate_limit=(
             settings.RERANK_CANDIDATE_LIMIT
